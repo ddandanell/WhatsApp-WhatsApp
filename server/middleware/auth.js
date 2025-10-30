@@ -1,28 +1,71 @@
-const bcrypt = require('bcrypt');
+const models = require('../database/models');
 
-// Simple authentication middleware
-function authenticate(req, res, next) {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Admin Area"');
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+// Simple session storage (in-memory)
+const sessions = new Set();
 
-  const base64Credentials = authHeader.split(' ')[1];
-  const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
-  const [username, password] = credentials.split(':');
-
-  const validUsername = process.env.ADMIN_USERNAME || 'admin';
-  const validPassword = process.env.ADMIN_PASSWORD || 'change_this_secure_password';
-
-  if (username === validUsername && password === validPassword) {
-    next();
-  } else {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Admin Area"');
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
+/**
+ * Generate a simple session token
+ */
+function generateToken() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-module.exports = authenticate;
+/**
+ * Authenticate user with username and password
+ */
+function authenticateUser(username, password) {
+  const storedUsername = models.settings.get('admin_username') || 'admin';
+  const storedPassword = models.settings.get('admin_password') || 'admin';
+  
+  return username === storedUsername && password === storedPassword;
+}
 
+/**
+ * Create a new session
+ */
+function createSession() {
+  const token = generateToken();
+  sessions.add(token);
+  return token;
+}
+
+/**
+ * Check if session is valid
+ */
+function isValidSession(token) {
+  return sessions.has(token);
+}
+
+/**
+ * Destroy a session
+ */
+function destroySession(token) {
+  sessions.delete(token);
+}
+
+/**
+ * Middleware to protect routes
+ */
+function authenticate(req, res, next) {
+  // Check for session token in cookie or header
+  const token = req.cookies?.session || req.headers['x-session-token'];
+  
+  if (token && isValidSession(token)) {
+    req.authenticated = true;
+    return next();
+  }
+  
+  // Not authenticated
+  return res.status(401).json({ 
+    success: false, 
+    error: 'Not authenticated. Please login.' 
+  });
+}
+
+module.exports = {
+  authenticate,
+  authenticateUser,
+  createSession,
+  destroySession,
+  isValidSession
+};

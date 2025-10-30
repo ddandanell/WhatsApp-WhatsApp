@@ -7,7 +7,29 @@
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- Login Screen -->
+    <div id="login-container" class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>🤖 WhatsApp AI Assistant</h1>
+                <p>Admin Panel Login</p>
+            </div>
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" name="username" class="form-control" placeholder="Enter username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" name="password" class="form-control" placeholder="Enter password" required>
+                </div>
+                <div id="login-error" class="alert alert-error" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-container" style="display: none;">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -40,6 +62,9 @@
                     <span>Whitelist</span>
                 </a>
             </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-secondary btn-block" onclick="app.logout()">🚪 Logout</button>
+            </div>
         </aside>
 
         <!-- Main Content Area -->

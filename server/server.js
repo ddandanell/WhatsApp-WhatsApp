@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
@@ -11,7 +12,6 @@ require('./database/init');
 // Import routes
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes = require('./routes/admin');
-const authenticate = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,7 +19,13 @@ const PORT = process.env.PORT || 3000;
 // ============= Middleware =============
 
 // Enable CORS
-app.use(cors());
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true // Allow cookies
+}));
+
+// Parse cookies
+app.use(cookieParser());
 
 // Parse JSON bodies
 app.use(bodyParser.json());

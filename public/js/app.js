@@ -8,22 +8,91 @@ class WhatsAppAssistant {
         this.init();
     }
 
-    init() {
-        this.setupAuth();
-        this.setupNavigation();
+    async init() {
         this.setupEventListeners();
-        this.loadDashboard();
-        this.startStatusMonitoring();
+        this.setupNavigation();
+        
+        // Check if already logged in
+        const isAuthenticated = await this.checkAuth();
+        if (isAuthenticated) {
+            this.showDashboard();
+            this.loadDashboard();
+            this.startStatusMonitoring();
+        } else {
+            this.showLogin();
+        }
     }
 
     // ============= Authentication =============
-    setupAuth() {
-        // No authentication required for testing
-        console.log('Authentication disabled - direct access enabled');
+    async checkAuth() {
+        try {
+            const response = await fetch(`${this.apiBase}/auth/status`, {
+                credentials: 'include'
+            });
+            const result = await response.json();
+            return result.authenticated || false;
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            return false;
+        }
     }
 
-    promptAuth() {
-        // Not needed for testing
+    showLogin() {
+        document.getElementById('login-container').style.display = 'flex';
+        document.getElementById('app-container').style.display = 'none';
+    }
+
+    showDashboard() {
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'flex';
+    }
+
+    async login(username, password) {
+        try {
+            const response = await fetch(`${this.apiBase}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ username, password })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showDashboard();
+                this.loadDashboard();
+                this.startStatusMonitoring();
+                return { success: true };
+            } else {
+                return { success: false, error: result.error || 'Login failed' };
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            return { success: false, error: 'Network error' };
+        }
+    }
+
+    async logout() {
+        try {
+            await fetch(`${this.apiBase}/logout`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            // Clear intervals
+            if (this.statusCheckInterval) clearInterval(this.statusCheckInterval);
+            if (this.autoRefreshInterval) clearInterval(this.autoRefreshInterval);
+
+            // Show login screen
+            this.showLogin();
+
+            // Clear login form
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('login-error').style.display = 'none';
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     }
 
     getHeaders() {
@@ -37,7 +106,8 @@ class WhatsAppAssistant {
         try {
             const options = {
                 method,
-                headers: this.getHeaders()
+                headers: this.getHeaders(),
+                credentials: 'include' // Include cookies for authentication
             };
 
             if (data) {
@@ -989,6 +1059,31 @@ WhatsAppAssistant.prototype.navigateTo = function(page) {
             break;
     }
 };
+
+// Setup login form
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            // Hide previous errors
+            errorDiv.style.display = 'none';
+            
+            // Attempt login
+            const result = await app.login(username, password);
+            
+            if (!result.success) {
+                errorDiv.textContent = result.error || 'Login failed';
+                errorDiv.style.display = 'block';
+            }
+        });
+    }
+});
 
 // Setup auto-refresh checkbox listener for inbox
 document.addEventListener('DOMContentLoaded', () => {

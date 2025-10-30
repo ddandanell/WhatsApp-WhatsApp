@@ -2,6 +2,82 @@ const express = require('express');
 const router = express.Router();
 const models = require('../database/models');
 const { knowledgeValidation, settingsValidation } = require('../middleware/validator');
+const { authenticateUser, createSession, destroySession } = require('../middleware/auth');
+
+// ============= Authentication Routes (Public) =============
+
+// Login endpoint
+router.post('/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Username and password required' 
+      });
+    }
+    
+    // Authenticate user
+    if (authenticateUser(username, password)) {
+      // Create session
+      const token = createSession();
+      
+      // Set session cookie
+      res.cookie('session', token, { 
+        httpOnly: true, 
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'lax'
+      });
+      
+      return res.json({ 
+        success: true, 
+        message: 'Login successful',
+        token: token
+      });
+    } else {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid username or password' 
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Logout endpoint
+router.post('/logout', (req, res) => {
+  try {
+    const token = req.cookies?.session || req.headers['x-session-token'];
+    if (token) {
+      destroySession(token);
+    }
+    res.clearCookie('session');
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check auth status
+router.get('/auth/status', (req, res) => {
+  const token = req.cookies?.session || req.headers['x-session-token'];
+  const { isValidSession } = require('../middleware/auth');
+  
+  if (token && isValidSession(token)) {
+    return res.json({ success: true, authenticated: true });
+  }
+  
+  return res.json({ success: true, authenticated: false });
+});
+
+// ============= Protected Routes (Require Authentication) =============
+
+const { authenticate } = require('../middleware/auth');
+
+// Apply authentication middleware to all routes below
+router.use(authenticate);
 
 // ============= Knowledge Base Routes =============
 
