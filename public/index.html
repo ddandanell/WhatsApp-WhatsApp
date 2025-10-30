@@ -49,6 +49,10 @@
                     <span class="icon">⚙️</span>
                     <span>Settings</span>
                 </a>
+                <a href="#" class="nav-item" data-page="send">
+                    <span class="icon">📤</span>
+                    <span>Send Messages</span>
+                </a>
                 <a href="#" class="nav-item" data-page="inbox">
                     <span class="icon">📥</span>
                     <span>Inbox</span>
@@ -164,6 +168,125 @@
                     <div class="card-body">
                         <div id="recent-messages" class="message-list">
                             <p class="text-muted">Loading messages...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Send Messages Page -->
+            <div id="send-page" class="page">
+                <div class="page-header">
+                    <h2>📤 Send Messages</h2>
+                    <p class="page-subtitle">Send messages and start conversations directly from the dashboard</p>
+                </div>
+
+                <!-- Send Single Message -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>📨 Send Single Message</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="send-message-form">
+                            <div class="form-group">
+                                <label for="send-phone">Phone Number (with country code)</label>
+                                <input type="tel" id="send-phone" class="form-control" placeholder="+62 811-2656-869" required>
+                                <small>Format: +country-code phone-number (e.g. +62 8112656869)</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="send-message">Message</label>
+                                <textarea id="send-message" class="form-control" rows="4" placeholder="Type your message here..." required></textarea>
+                                <small>The message will be sent as David (using your personality)</small>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <span>📤 Send Message</span>
+                            </button>
+                        </form>
+
+                        <div id="send-result" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+
+                <!-- Start Automated Conversation -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>🤖 Start Automated Conversation</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="background: #e3f2fd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                            <strong>💡 What does this do?</strong>
+                            <p style="margin: 0.5rem 0 0 0;">This will send an initial message like "Hey, how are you?" and then the AI will automatically continue the conversation naturally, asking follow-up questions and chatting like you would.</p>
+                        </div>
+
+                        <form id="start-conversation-form">
+                            <div class="form-group">
+                                <label for="conv-phone">Phone Number (with country code)</label>
+                                <input type="tel" id="conv-phone" class="form-control" placeholder="+62 811-2656-869" required>
+                                <small>The number to start a conversation with</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="conv-opener">Conversation Starter</label>
+                                <select id="conv-opener" class="form-control">
+                                    <option value="Hey! How are you?">Hey! How are you?</option>
+                                    <option value="Hey baby, what are you up to?">Hey baby, what are you up to?</option>
+                                    <option value="Morning! How's your day going?">Morning! How's your day going?</option>
+                                    <option value="Hey, thinking about you :))">Hey, thinking about you :))</option>
+                                    <option value="What are you doing?">What are you doing?</option>
+                                    <option value="Where are you?">Where are you?</option>
+                                    <option value="custom">Custom message...</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="custom-opener-group" style="display: none;">
+                                <label for="conv-custom">Custom Opening Message</label>
+                                <textarea id="conv-custom" class="form-control" rows="2" placeholder="Type your custom opener..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="toggle-label">
+                                    <span>Auto-continue conversation</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="conv-auto-continue" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </label>
+                                <small>AI will automatically respond to their replies and keep the conversation going</small>
+                            </div>
+
+                            <button type="submit" class="btn btn-success">
+                                <span>🚀 Start Conversation</span>
+                            </button>
+                        </form>
+
+                        <div id="conversation-result" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>⚡ Quick Actions</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="quick-actions-grid">
+                            <button class="quick-action-btn" onclick="app.quickMessage('girlfriend')">
+                                <span class="icon">💕</span>
+                                <span class="label">Message Girlfriend</span>
+                            </button>
+                            <button class="quick-action-btn" onclick="app.quickMessage('checkIn')">
+                                <span class="icon">👋</span>
+                                <span class="label">Quick Check-in</span>
+                            </button>
+                            <button class="quick-action-btn" onclick="app.quickMessage('whereAreYou')">
+                                <span class="icon">📍</span>
+                                <span class="label">Where are you?</span>
+                            </button>
+                            <button class="quick-action-btn" onclick="app.quickMessage('goodMorning')">
+                                <span class="icon">☀️</span>
+                                <span class="label">Good Morning</span>
+                            </button>
                         </div>
                     </div>
                 </div>

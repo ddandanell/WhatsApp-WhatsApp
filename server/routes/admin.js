@@ -277,5 +277,89 @@ router.put('/whitelist/:phoneNumber', (req, res) => {
   }
 });
 
+// ============= Send Message Routes =============
+
+// Send a message directly
+router.post('/send-message', async (req, res) => {
+  try {
+    const { phoneNumber, message } = req.body;
+    
+    if (!phoneNumber || !message) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Phone number and message are required' 
+      });
+    }
+    
+    const whatsappService = require('../services/whatsapp');
+    const result = await whatsappService.sendMessage(phoneNumber, message);
+    
+    if (result.success) {
+      // Log the message
+      models.messages.add(phoneNumber, message, 'outgoing', 'sent');
+      res.json({ 
+        success: true, 
+        message: 'Message sent successfully',
+        messageId: result.messageId
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || 'Failed to send message' 
+      });
+    }
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Start automated conversation
+router.post('/start-conversation', async (req, res) => {
+  try {
+    const { phoneNumber, opener, autoContinue = true } = req.body;
+    
+    if (!phoneNumber || !opener) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Phone number and opener message are required' 
+      });
+    }
+    
+    const whatsappService = require('../services/whatsapp');
+    
+    // Send the opening message
+    const result = await whatsappService.sendMessage(phoneNumber, opener);
+    
+    if (result.success) {
+      // Log the message
+      models.messages.add(phoneNumber, opener, 'outgoing', 'sent');
+      
+      // If auto-continue is enabled, add to whitelist
+      if (autoContinue) {
+        const isWhitelisted = models.whitelist.isWhitelisted(phoneNumber);
+        if (!isWhitelisted) {
+          models.whitelist.add(phoneNumber, '', 'Auto-added from conversation starter');
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'Conversation started successfully',
+        autoContinue: autoContinue,
+        messageId: result.messageId
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || 'Failed to start conversation' 
+      });
+    }
+  } catch (error) {
+    console.error('Start conversation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
 

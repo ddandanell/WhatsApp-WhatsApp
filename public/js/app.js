@@ -1004,6 +1004,156 @@ class WhatsAppAssistant {
             }
         }
     }
+
+    // ============= Send Messages =============
+    loadSendPage() {
+        // Setup form listeners if not already set
+        this.setupSendMessageForms();
+    }
+
+    setupSendMessageForms() {
+        // Send single message form
+        const sendForm = document.getElementById('send-message-form');
+        if (sendForm && !sendForm.dataset.listenerAdded) {
+            sendForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.sendSingleMessage();
+            });
+            sendForm.dataset.listenerAdded = 'true';
+        }
+
+        // Start conversation form
+        const convForm = document.getElementById('start-conversation-form');
+        if (convForm && !convForm.dataset.listenerAdded) {
+            convForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.startConversation();
+            });
+            convForm.dataset.listenerAdded = 'true';
+        }
+
+        // Custom opener toggle
+        const openerSelect = document.getElementById('conv-opener');
+        if (openerSelect && !openerSelect.dataset.listenerAdded) {
+            openerSelect.addEventListener('change', (e) => {
+                const customGroup = document.getElementById('custom-opener-group');
+                customGroup.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            });
+            openerSelect.dataset.listenerAdded = 'true';
+        }
+    }
+
+    async sendSingleMessage() {
+        const phoneNumber = document.getElementById('send-phone').value;
+        const message = document.getElementById('send-message').value;
+        const resultDiv = document.getElementById('send-result');
+
+        if (!phoneNumber || !message) {
+            resultDiv.innerHTML = '<div class="alert alert-error">Please fill in all fields</div>';
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="alert alert-info">Sending message...</div>';
+
+        const result = await this.apiCall('/send-message', 'POST', { phoneNumber, message });
+
+        if (result.success) {
+            resultDiv.innerHTML = '<div class="alert alert-success">✅ Message sent successfully!</div>';
+            document.getElementById('send-message-form').reset();
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 3000);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error || 'Failed to send message'}</div>`;
+        }
+    }
+
+    async startConversation() {
+        const phoneNumber = document.getElementById('conv-phone').value;
+        const openerSelect = document.getElementById('conv-opener');
+        let opener = openerSelect.value;
+        
+        if (opener === 'custom') {
+            opener = document.getElementById('conv-custom').value;
+            if (!opener) {
+                document.getElementById('conversation-result').innerHTML = '<div class="alert alert-error">Please enter a custom message</div>';
+                return;
+            }
+        }
+
+        const autoContinue = document.getElementById('conv-auto-continue').checked;
+        const resultDiv = document.getElementById('conversation-result');
+
+        if (!phoneNumber) {
+            resultDiv.innerHTML = '<div class="alert alert-error">Please enter a phone number</div>';
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="alert alert-info">🚀 Starting conversation...</div>';
+
+        const result = await this.apiCall('/start-conversation', 'POST', { 
+            phoneNumber, 
+            opener, 
+            autoContinue 
+        });
+
+        if (result.success) {
+            let message = '✅ Conversation started!<br>';
+            message += `📤 Sent: "${opener}"<br>`;
+            if (autoContinue) {
+                message += '🤖 AI will automatically continue the conversation';
+            }
+            resultDiv.innerHTML = `<div class="alert alert-success">${message}</div>`;
+            document.getElementById('start-conversation-form').reset();
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error || 'Failed to start conversation'}</div>`;
+        }
+    }
+
+    async quickMessage(type) {
+        const messages = {
+            girlfriend: {
+                phone: '+628112656869', // Your girlfriend's number
+                text: 'Hey baby, what are you up to?'
+            },
+            checkIn: {
+                phone: '+628112656869',
+                text: 'Hey! How are you?'
+            },
+            whereAreYou: {
+                phone: '+628112656869',
+                text: 'Where are you?'
+            },
+            goodMorning: {
+                phone: '+628112656869',
+                text: 'Good morning baby ☀️'
+            }
+        };
+
+        const msg = messages[type];
+        if (!msg) return;
+
+        // Navigate to send page and fill in the form
+        this.navigateTo('send');
+        
+        setTimeout(() => {
+            document.getElementById('send-phone').value = msg.phone;
+            document.getElementById('send-message').value = msg.text;
+            
+            // Show a notification
+            const resultDiv = document.getElementById('send-result');
+            resultDiv.innerHTML = '<div class="alert alert-info">💡 Quick message loaded! Click "Send Message" to send it.</div>';
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 3000);
+        }, 100);
+    }
 }
 
 // Initialize the app
@@ -1056,6 +1206,9 @@ WhatsAppAssistant.prototype.navigateTo = function(page) {
             break;
         case 'whitelist':
             this.loadWhitelist();
+            break;
+        case 'send':
+            this.loadSendPage();
             break;
     }
 };
