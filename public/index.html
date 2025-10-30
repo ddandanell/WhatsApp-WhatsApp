@@ -337,6 +337,40 @@
                         </div>
                     </div>
 
+                    <!-- API Configuration -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>🔑 API Configuration</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid #ffc107;">
+                                <strong>🔒 Secure:</strong> API keys are stored in the database and NOT exposed in your code. Perfect for deployment to Vercel, Heroku, etc.
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-grok-key">Grok API Key (xAI)</label>
+                                <input type="password" name="grok_api_key" id="setting-grok-key" class="form-control" placeholder="xai-...">
+                                <small>Your Grok AI API key from <a href="https://console.x.ai/" target="_blank">console.x.ai</a></small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-wasender-key">Wasender API Key</label>
+                                <input type="password" name="wasender_api_key" id="setting-wasender-key" class="form-control" placeholder="Enter your WasenderAPI key">
+                                <small>Your WasenderAPI key from <a href="https://wasenderapi.com/" target="_blank">wasenderapi.com</a></small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-wasender-url">Wasender API URL</label>
+                                <input type="text" name="wasender_api_url" id="setting-wasender-url" class="form-control" placeholder="https://wasenderapi.com/api" value="https://wasenderapi.com/api">
+                                <small>Usually: https://wasenderapi.com/api</small>
+                            </div>
+
+                            <div style="margin-top: 1rem; padding: 0.75rem; background: #d1ecf1; border-radius: 6px; border-left: 4px solid #0c5460;">
+                                <small><strong>💡 Note:</strong> Changes take effect immediately. No server restart needed!</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- AI Settings -->
                     <div class="card">
                         <div class="card-header">

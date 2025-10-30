@@ -2,11 +2,21 @@ const axios = require('axios');
 
 class GrokService {
   constructor() {
-    this.apiKey = process.env.GROK_API_KEY;
-    this.apiUrl = process.env.GROK_API_URL || 'https://api.x.ai/v1';
-    
-    if (!this.apiKey) {
-      console.warn('⚠️  Grok API key not configured');
+    this.apiUrl = 'https://api.x.ai/v1';
+  }
+
+  /**
+   * Get API key from database or environment
+   * @returns {string}
+   */
+  getApiKey() {
+    try {
+      const models = require('../database/models');
+      const dbKey = models.settings.get('grok_api_key');
+      return dbKey || process.env.GROK_API_KEY || '';
+    } catch (error) {
+      console.warn('⚠️  Could not load Grok API key from database, using .env');
+      return process.env.GROK_API_KEY || '';
     }
   }
 
@@ -21,8 +31,10 @@ class GrokService {
    */
   async generateResponse(userMessage, knowledgeContext = '', systemPrompt = '', temperature = 0.7, personalization = {}) {
     try {
-      if (!this.apiKey) {
-        throw new Error('Grok API key not configured');
+      const apiKey = this.getApiKey();
+      
+      if (!apiKey) {
+        throw new Error('Grok API key not configured. Please add it in Settings → API Configuration');
       }
 
       // Build the context message with personalization
@@ -71,7 +83,7 @@ class GrokService {
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 30000 // 30 second timeout

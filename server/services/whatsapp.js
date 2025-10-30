@@ -2,11 +2,36 @@ const axios = require('axios');
 
 class WhatsAppService {
   constructor() {
-    this.apiKey = process.env.WASENDER_API_KEY;
-    this.apiUrl = process.env.WASENDER_API_URL || 'https://wasenderapi.com/api';
-    
-    if (!this.apiKey) {
-      console.warn('⚠️  WasenderAPI key not configured');
+    // API key and URL now loaded from database
+  }
+
+  /**
+   * Get API key from database or environment
+   * @returns {string}
+   */
+  getApiKey() {
+    try {
+      const models = require('../database/models');
+      const dbKey = models.settings.get('wasender_api_key');
+      return dbKey || process.env.WASENDER_API_KEY || '';
+    } catch (error) {
+      console.warn('⚠️  Could not load Wasender API key from database, using .env');
+      return process.env.WASENDER_API_KEY || '';
+    }
+  }
+
+  /**
+   * Get API URL from database or environment
+   * @returns {string}
+   */
+  getApiUrl() {
+    try {
+      const models = require('../database/models');
+      const dbUrl = models.settings.get('wasender_api_url');
+      return dbUrl || process.env.WASENDER_API_URL || 'https://wasenderapi.com/api';
+    } catch (error) {
+      console.warn('⚠️  Could not load Wasender API URL from database, using .env');
+      return process.env.WASENDER_API_URL || 'https://wasenderapi.com/api';
     }
   }
 
@@ -18,8 +43,11 @@ class WhatsAppService {
    */
   async sendMessage(phoneNumber, message) {
     try {
-      if (!this.apiKey) {
-        throw new Error('WasenderAPI key not configured');
+      const apiKey = this.getApiKey();
+      const apiUrl = this.getApiUrl();
+      
+      if (!apiKey) {
+        throw new Error('WasenderAPI key not configured. Please add it in Settings → API Configuration');
       }
 
       // Format phone number according to WasenderAPI requirements
@@ -29,14 +57,14 @@ class WhatsAppService {
       console.log(`📤 Sending message to ${formattedNumber}...`);
 
       const response = await axios.post(
-        `${this.apiUrl}/send-message`,
+        `${apiUrl}/send-message`,
         {
           to: formattedNumber,
           text: message
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 15000 // 15 second timeout
@@ -75,11 +103,14 @@ class WhatsAppService {
    */
   async getSessionStatus() {
     try {
+      const apiKey = this.getApiKey();
+      const apiUrl = this.getApiUrl();
+      
       const response = await axios.get(
-        `${this.apiUrl}/status`,
+        `${apiUrl}/status`,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 10000
@@ -99,12 +130,15 @@ class WhatsAppService {
    */
   async checkNumberOnWhatsApp(phoneNumber) {
     try {
+      const apiKey = this.getApiKey();
+      const apiUrl = this.getApiUrl();
       const cleanNumber = phoneNumber.replace(/[^\d]/g, '');
+      
       const response = await axios.get(
-        `${this.apiUrl}/on-whatsapp/${cleanNumber}`,
+        `${apiUrl}/on-whatsapp/${cleanNumber}`,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 10000
