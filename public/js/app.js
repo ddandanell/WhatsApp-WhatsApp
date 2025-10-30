@@ -1,0 +1,1003 @@
+class WhatsAppAssistant {
+    constructor() {
+        this.apiBase = '/api';
+        this.currentPage = 'dashboard';
+        this.credentials = null;
+        this.autoRefreshInterval = null;
+        this.statusCheckInterval = null;
+        this.init();
+    }
+
+    init() {
+        this.setupAuth();
+        this.setupNavigation();
+        this.setupEventListeners();
+        this.loadDashboard();
+        this.startStatusMonitoring();
+    }
+
+    // ============= Authentication =============
+    setupAuth() {
+        // No authentication required for testing
+        console.log('Authentication disabled - direct access enabled');
+    }
+
+    promptAuth() {
+        // Not needed for testing
+    }
+
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json'
+        };
+    }
+
+    // ============= API Calls =============
+    async apiCall(endpoint, method = 'GET', data = null) {
+        try {
+            const options = {
+                method,
+                headers: this.getHeaders()
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(`${this.apiBase}${endpoint}`, options);
+
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('API Error:', error);
+            this.showToast('API request failed: ' + error.message, 'error');
+            return null;
+        }
+    }
+
+    // ============= Navigation =============
+    setupNavigation() {
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = item.dataset.page;
+                this.navigateTo(page);
+            });
+        });
+    }
+
+    navigateTo(page) {
+        // Update active nav item
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.page === page) {
+                item.classList.add('active');
+            }
+        });
+
+        // Update active page
+        document.querySelectorAll('.page').forEach(p => {
+            p.classList.remove('active');
+        });
+        document.getElementById(`${page}-page`).classList.add('active');
+
+        this.currentPage = page;
+
+        // Load page data
+        switch (page) {
+            case 'dashboard':
+                this.loadDashboard();
+                break;
+            case 'knowledge':
+                this.loadKnowledge();
+                break;
+            case 'settings':
+                this.loadSettings();
+                break;
+            case 'messages':
+                this.loadMessages();
+                break;
+            case 'whitelist':
+                this.loadWhitelist();
+                break;
+        }
+    }
+
+    // ============= Dashboard =============
+    async loadDashboard() {
+        try {
+            // Load stats
+            const statsResponse = await this.apiCall('/stats');
+            if (statsResponse?.success) {
+                const stats = statsResponse.data;
+                document.getElementById('stat-total').textContent = stats.total;
+                document.getElementById('stat-replied').textContent = stats.replied;
+                document.getElementById('stat-avg-time').textContent = `${stats.avgResponseTime}s`;
+            }
+
+            // Load knowledge count
+            const knowledgeResponse = await this.apiCall('/knowledge');
+            if (knowledgeResponse?.success) {
+                document.getElementById('stat-knowledge').textContent = knowledgeResponse.data.length;
+            }
+
+            // Load settings for master toggle
+            const settingsResponse = await this.apiCall('/settings');
+            if (settingsResponse?.success) {
+                const autoReply = settingsResponse.data.auto_reply_enabled === 'true';
+                document.getElementById('master-toggle').checked = autoReply;
+                document.getElementById('status-label').textContent = autoReply ? 'Enabled' : 'Disabled';
+            }
+
+            // Load recent messages
+            const messagesResponse = await this.apiCall('/messages?limit=5');
+            if (messagesResponse?.success) {
+                this.displayRecentMessages(messagesResponse.data);
+            }
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+        }
+    }
+
+    displayRecentMessages(messages) {
+        const container = document.getElementById('recent-messages');
+        
+        if (messages.length === 0) {
+            container.innerHTML = '<p class="text-muted">No messages yet</p>';
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => `
+            <div class="message-item">
+                <div class="message-header">
+                    <span class="message-from">${msg.from_number}</span>
+                    <span class="message-time">${this.formatDate(msg.timestamp)}</span>
+                </div>
+                <div class="message-text">${this.escapeHtml(msg.message_text)}</div>
+                ${msg.response_text ? `
+                    <div class="message-response">
+                        <strong>Response:</strong> ${this.escapeHtml(msg.response_text)}
+                    </div>
+                ` : ''}
+                <span class="message-status status-${msg.status}">${msg.status}</span>
+            </div>
+        `).join('');
+    }
+
+    // ============= Knowledge Base =============
+    async loadKnowledge() {
+        const response = await this.apiCall('/knowledge');
+        if (response?.success) {
+            this.displayKnowledge(response.data);
+        }
+    }
+
+    displayKnowledge(entries) {
+        const container = document.getElementById('knowledge-list');
+        
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">No knowledge entries yet. Add your first one!</p>';
+            return;
+        }
+
+        container.innerHTML = entries.map(entry => `
+            <div class="knowledge-item">
+                <div class="knowledge-header">
+                    <div>
+                        <div class="knowledge-title">${this.escapeHtml(entry.title)}</div>
+                        <div class="knowledge-meta">
+                            <span class="knowledge-badge">📁 ${this.escapeHtml(entry.category)}</span>
+                            ${entry.tags ? `<span class="knowledge-badge">🏷️ ${this.escapeHtml(entry.tags)}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="knowledge-content">${this.escapeHtml(entry.content).substring(0, 200)}${entry.content.length > 200 ? '...' : ''}</div>
+                <div class="knowledge-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="app.editKnowledge(${entry.id})">✏️ Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick="app.deleteKnowledge(${entry.id})">🗑️ Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    showKnowledgeForm(edit = false) {
+        document.getElementById('knowledge-form').style.display = 'block';
+        document.getElementById('form-title').textContent = edit ? 'Edit Knowledge' : 'Add New Knowledge';
+        
+        if (!edit) {
+            document.getElementById('knowledge-edit-form').reset();
+            document.getElementById('edit-id').value = '';
+        }
+    }
+
+    hideKnowledgeForm() {
+        document.getElementById('knowledge-form').style.display = 'none';
+        document.getElementById('knowledge-edit-form').reset();
+    }
+
+    async editKnowledge(id) {
+        const response = await this.apiCall(`/knowledge/${id}`);
+        if (response?.success) {
+            const entry = response.data;
+            document.getElementById('edit-id').value = entry.id;
+            document.getElementById('knowledge-title').value = entry.title;
+            document.getElementById('knowledge-content').value = entry.content;
+            document.getElementById('knowledge-category').value = entry.category;
+            document.getElementById('knowledge-tags').value = entry.tags;
+            this.showKnowledgeForm(true);
+        }
+    }
+
+    async deleteKnowledge(id) {
+        if (!confirm('Are you sure you want to delete this knowledge entry?')) {
+            return;
+        }
+
+        const response = await this.apiCall(`/knowledge/${id}`, 'DELETE');
+        if (response?.success) {
+            this.showToast('Knowledge entry deleted successfully', 'success');
+            this.loadKnowledge();
+        }
+    }
+
+    // ============= Settings =============
+    async loadSettings() {
+        const response = await this.apiCall('/settings');
+        if (response?.success) {
+            const settings = response.data;
+            
+            document.getElementById('setting-auto-reply').checked = settings.auto_reply_enabled === 'true';
+            document.getElementById('setting-delay').value = settings.response_delay || 4;
+            document.getElementById('setting-hours-start').value = settings.active_hours_start || '00:00';
+            document.getElementById('setting-hours-end').value = settings.active_hours_end || '23:59';
+            document.getElementById('setting-temperature').value = settings.ai_temperature || 0.8;
+            document.getElementById('temp-value').textContent = settings.ai_temperature || 0.8;
+            document.getElementById('setting-system-prompt').value = settings.system_prompt || '';
+            
+            // Personalization settings
+            if (document.getElementById('setting-my-name')) {
+                document.getElementById('setting-my-name').value = settings.my_name || '';
+            }
+            if (document.getElementById('setting-my-personality')) {
+                document.getElementById('setting-my-personality').value = settings.my_personality || '';
+            }
+            if (document.getElementById('setting-my-style')) {
+                document.getElementById('setting-my-style').value = settings.my_writing_style || '';
+            }
+            if (document.getElementById('setting-my-phrases')) {
+                document.getElementById('setting-my-phrases').value = settings.my_common_phrases || '';
+            }
+        }
+    }
+
+    async saveSettings() {
+        const settings = {
+            auto_reply_enabled: document.getElementById('setting-auto-reply').checked ? 'true' : 'false',
+            response_delay: document.getElementById('setting-delay').value,
+            active_hours_start: document.getElementById('setting-hours-start').value,
+            active_hours_end: document.getElementById('setting-hours-end').value,
+            ai_temperature: document.getElementById('setting-temperature').value,
+            system_prompt: document.getElementById('setting-system-prompt').value
+        };
+
+        // Add personalization settings if fields exist
+        if (document.getElementById('setting-my-name')) {
+            settings.my_name = document.getElementById('setting-my-name').value;
+        }
+        if (document.getElementById('setting-my-personality')) {
+            settings.my_personality = document.getElementById('setting-my-personality').value;
+        }
+        if (document.getElementById('setting-my-style')) {
+            settings.my_writing_style = document.getElementById('setting-my-style').value;
+        }
+        if (document.getElementById('setting-my-phrases')) {
+            settings.my_common_phrases = document.getElementById('setting-my-phrases').value;
+        }
+
+        const response = await this.apiCall('/settings', 'POST', settings);
+        if (response?.success) {
+            this.showToast('✅ Settings saved! Your AI will now write exactly like you.', 'success');
+        }
+    }
+
+    // ============= Messages =============
+    async loadMessages() {
+        const response = await this.apiCall('/messages?limit=50');
+        if (response?.success) {
+            this.displayMessages(response.data);
+        }
+    }
+
+    displayMessages(messages) {
+        const container = document.getElementById('message-history');
+        
+        if (messages.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">No messages yet</p>';
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => `
+            <div class="message-item">
+                <div class="message-header">
+                    <span class="message-from">📱 ${msg.from_number}</span>
+                    <span class="message-time">${this.formatDate(msg.timestamp)}</span>
+                </div>
+                <div class="message-text">
+                    <strong>Message:</strong> ${this.escapeHtml(msg.message_text)}
+                </div>
+                ${msg.response_text ? `
+                    <div class="message-response">
+                        <strong>🤖 Response:</strong> ${this.escapeHtml(msg.response_text)}
+                        <br><small>Response time: ${msg.response_time}s | Knowledge used: ${msg.knowledge_used}</small>
+                    </div>
+                ` : ''}
+                <span class="message-status status-${msg.status}">${msg.status}</span>
+            </div>
+        `).join('');
+    }
+
+    // ============= Event Listeners =============
+    setupEventListeners() {
+        // Master toggle
+        document.getElementById('master-toggle').addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            await this.apiCall('/settings', 'POST', { auto_reply_enabled: enabled ? 'true' : 'false' });
+            document.getElementById('status-label').textContent = enabled ? 'Enabled' : 'Disabled';
+            this.showToast(`Auto-reply ${enabled ? 'enabled' : 'disabled'}`, 'success');
+        });
+
+        // Knowledge form submission
+        document.getElementById('knowledge-edit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('edit-id').value;
+            const data = {
+                title: document.getElementById('knowledge-title').value,
+                content: document.getElementById('knowledge-content').value,
+                category: document.getElementById('knowledge-category').value,
+                tags: document.getElementById('knowledge-tags').value
+            };
+
+            const endpoint = id ? `/knowledge/${id}` : '/knowledge';
+            const method = id ? 'PUT' : 'POST';
+
+            const response = await this.apiCall(endpoint, method, data);
+            if (response?.success) {
+                this.showToast(`Knowledge ${id ? 'updated' : 'created'} successfully`, 'success');
+                this.hideKnowledgeForm();
+                this.loadKnowledge();
+            }
+        });
+
+        // Knowledge search
+        let searchTimeout;
+        document.getElementById('knowledge-search').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const query = e.target.value;
+                if (query) {
+                    this.searchKnowledge(query);
+                } else {
+                    this.loadKnowledge();
+                }
+            }, 300);
+        });
+
+        // Temperature slider
+        document.getElementById('setting-temperature').addEventListener('input', (e) => {
+            document.getElementById('temp-value').textContent = e.target.value;
+        });
+    }
+
+    async searchKnowledge(query) {
+        const response = await this.apiCall(`/knowledge/search?q=${encodeURIComponent(query)}`);
+        if (response?.success) {
+            this.displayKnowledge(response.data);
+        }
+    }
+
+    // ============= Utilities =============
+    showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'Just now';
+        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+        
+        return date.toLocaleString();
+    }
+
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // ============= API Status Monitoring =============
+    async startStatusMonitoring() {
+        // Initial check
+        await this.checkAllAPIStatus();
+        
+        // Check every 10 seconds
+        this.statusCheckInterval = setInterval(() => {
+            this.checkAllAPIStatus();
+        }, 10000);
+    }
+
+    async checkAllAPIStatus() {
+        // Check Server
+        try {
+            const healthResponse = await fetch('/webhook/health');
+            if (healthResponse.ok) {
+                this.updateStatus('server', 'online', '🟢', 'Online');
+            } else {
+                this.updateStatus('server', 'offline', '🔴', 'Offline');
+            }
+        } catch (error) {
+            this.updateStatus('server', 'offline', '🔴', 'Offline');
+        }
+
+        // Check Database (via settings API)
+        try {
+            const dbResponse = await this.apiCall('/settings');
+            if (dbResponse && dbResponse.success) {
+                this.updateStatus('database', 'online', '🟢', 'Connected');
+            } else {
+                this.updateStatus('database', 'warning', '🟡', 'Issues');
+            }
+        } catch (error) {
+            this.updateStatus('database', 'offline', '🔴', 'Disconnected');
+        }
+
+        // Check WhatsApp API (simulated - based on last message sent)
+        const messages = await this.apiCall('/messages?limit=1');
+        if (messages && messages.success && messages.data.length > 0) {
+            const lastMessage = messages.data[0];
+            if (lastMessage.response_text) {
+                this.updateStatus('whatsapp', 'online', '🟢', 'Connected');
+            } else {
+                this.updateStatus('whatsapp', 'warning', '🟡', 'No recent activity');
+            }
+        } else {
+            this.updateStatus('whatsapp', 'warning', '🟡', 'Not tested yet');
+        }
+
+        // Check Grok AI (simulated - based on successful responses)
+        if (messages && messages.success && messages.data.length > 0) {
+            const lastMessage = messages.data[0];
+            if (lastMessage.response_text && lastMessage.status === 'replied') {
+                this.updateStatus('grok', 'online', '🟢', 'Responding');
+            } else {
+                this.updateStatus('grok', 'warning', '🟡', 'Waiting');
+            }
+        } else {
+            this.updateStatus('grok', 'warning', '🟡', 'Not tested yet');
+        }
+    }
+
+    updateStatus(component, status, icon, text) {
+        const iconElement = document.getElementById(`${component}-status`);
+        const textElement = document.getElementById(`${component}-status-text`);
+        
+        if (iconElement) {
+            iconElement.textContent = icon;
+            iconElement.className = `status-icon ${status}`;
+        }
+        
+        if (textElement) {
+            textElement.textContent = text;
+            textElement.className = `status-text ${status}`;
+        }
+    }
+
+    // ============= Enhanced Message Display =============
+    displayMessagesEnhanced(messages) {
+        const container = document.getElementById('message-history');
+        document.getElementById('total-conversations').textContent = `${messages.length} messages`;
+        
+        if (messages.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">No messages yet. Send a test message to get started!</div>';
+            return;
+        }
+
+        // Group messages by phone number
+        const conversations = {};
+        messages.forEach(msg => {
+            if (!conversations[msg.from_number]) {
+                conversations[msg.from_number] = [];
+            }
+            conversations[msg.from_number].push(msg);
+        });
+
+        container.innerHTML = Object.entries(conversations).map(([phone, msgs]) => {
+            return `
+                <div class="message-conversation">
+                    <div class="message-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="message-from" style="font-weight: 600;">📱 ${phone}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${msgs.length} messages</span>
+                        </div>
+                    </div>
+                    <div class="message-thread">
+                        ${msgs.map(msg => this.renderMessageBubble(msg)).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderMessageBubble(msg) {
+        const time = this.formatDate(msg.timestamp);
+        const hasResponse = msg.response_text && msg.response_text.trim();
+        
+        return `
+            ${hasResponse ? `
+                <div class="message-bubble incoming">
+                    <div class="message-content">${this.escapeHtml(msg.message_text)}</div>
+                    <div class="message-meta">
+                        <span class="message-time-full">${time}</span>
+                        <span class="message-status-icon">📩 Received</span>
+                    </div>
+                </div>
+                <div class="message-bubble outgoing">
+                    <div class="message-content">${this.escapeHtml(msg.response_text)}</div>
+                    <div class="message-meta">
+                        <span class="message-time-full">
+                            ${msg.response_time ? `${msg.response_time}s` : ''}
+                        </span>
+                        <span class="message-status-icon delivery-check">
+                            ${msg.status === 'replied' ? '✓✓' : '✓'} Sent
+                        </span>
+                    </div>
+                </div>
+            ` : `
+                <div class="message-bubble incoming">
+                    <div class="message-content">${this.escapeHtml(msg.message_text)}</div>
+                    <div class="message-meta">
+                        <span class="message-time-full">${time}</span>
+                        <span class="message-status-icon delivery-pending">⏳ Pending</span>
+                    </div>
+                </div>
+            `}
+        `;
+    }
+
+    // ============= Auto-refresh Messages =============
+    startAutoRefresh() {
+        const checkbox = document.getElementById('auto-refresh-messages');
+        if (!checkbox) return;
+        
+        if (checkbox.checked && this.currentPage === 'messages') {
+            this.autoRefreshInterval = setInterval(() => {
+                if (this.currentPage === 'messages') {
+                    this.loadMessages(true); // silent refresh
+                }
+            }, 5000);
+        } else {
+            if (this.autoRefreshInterval) {
+                clearInterval(this.autoRefreshInterval);
+                this.autoRefreshInterval = null;
+            }
+        }
+    }
+
+    async loadMessages(silent = false) {
+        if (!silent) {
+            const container = document.getElementById('message-history');
+            if (container) {
+                container.innerHTML = '<div class="text-center" style="padding: 2rem;"><div class="loading-spinner"></div></div>';
+            }
+        }
+
+        const response = await this.apiCall('/messages?limit=100');
+        if (response?.success) {
+            this.displayMessagesEnhanced(response.data);
+        }
+    }
+
+    // ============= Whitelist Management =============
+    async loadWhitelist() {
+        const response = await this.apiCall('/whitelist');
+        if (response?.success) {
+            this.displayWhitelist(response.data);
+        }
+        
+        // Also load pending messages
+        await this.loadPendingMessages();
+    }
+
+    displayWhitelist(whitelist) {
+        const container = document.getElementById('whitelist-list');
+        document.getElementById('whitelist-count').textContent = `${whitelist.length} numbers`;
+        
+        if (whitelist.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">No numbers whitelisted yet. Add a number to start auto-replying.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border-color);">
+                        <th style="padding: 0.75rem; text-align: left;">Phone Number</th>
+                        <th style="padding: 0.75rem; text-align: left;">Name</th>
+                        <th style="padding: 0.75rem; text-align: left;">Notes</th>
+                        <th style="padding: 0.75rem; text-align: left;">Added</th>
+                        <th style="padding: 0.75rem; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${whitelist.map(entry => `
+                        <tr style="border-bottom: 1px solid var(--border-color);">
+                            <td style="padding: 0.75rem; font-weight: 600;">📱 ${this.escapeHtml(entry.phone_number)}</td>
+                            <td style="padding: 0.75rem;">${this.escapeHtml(entry.name || '-')}</td>
+                            <td style="padding: 0.75rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(entry.notes || '-')}</td>
+                            <td style="padding: 0.75rem; font-size: 0.875rem; color: var(--text-secondary);">${this.formatDate(entry.added_at)}</td>
+                            <td style="padding: 0.75rem; text-align: right;">
+                                <button class="btn btn-sm btn-danger" onclick="app.removeFromWhitelist('${entry.phone_number}')">🗑️ Remove</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    async loadPendingMessages() {
+        const messagesResponse = await this.apiCall('/messages?limit=100');
+        const whitelistResponse = await this.apiCall('/whitelist');
+        
+        if (messagesResponse?.success && whitelistResponse?.success) {
+            const allMessages = messagesResponse.data;
+            const whitelistedNumbers = new Set(whitelistResponse.data.map(w => w.phone_number));
+            
+            // Find messages from non-whitelisted numbers
+            const pending = allMessages.filter(msg => !whitelistedNumbers.has(msg.from_number) && !msg.response_text);
+            
+            // Group by phone number
+            const pendingByNumber = {};
+            pending.forEach(msg => {
+                if (!pendingByNumber[msg.from_number]) {
+                    pendingByNumber[msg.from_number] = [];
+                }
+                pendingByNumber[msg.from_number].push(msg);
+            });
+            
+            this.displayPendingMessages(pendingByNumber);
+        }
+    }
+
+    displayPendingMessages(pendingByNumber) {
+        const container = document.getElementById('pending-messages');
+        const totalPending = Object.keys(pendingByNumber).length;
+        document.getElementById('pending-count').textContent = `${totalPending} pending`;
+        
+        if (totalPending === 0) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">No pending messages. All incoming numbers are whitelisted!</div>';
+            return;
+        }
+
+        container.innerHTML = Object.entries(pendingByNumber).map(([phone, msgs]) => `
+            <div class="message-conversation" style="background: #fff3cd;">
+                <div class="message-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #ffc107;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="message-from" style="font-weight: 600;">🚫 ${phone} (Not Whitelisted)</span>
+                        <button class="btn btn-sm btn-primary" onclick="app.approveAndWhitelist('${phone}')">✅ Approve & Add to Whitelist</button>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    ${msgs.map(msg => `
+                        <div style="padding: 0.75rem; background: white; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid #ffc107;">
+                            <div style="margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem;">${this.formatDate(msg.timestamp)}</div>
+                            <div>${this.escapeHtml(msg.message_text)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    showAddWhitelistForm() {
+        document.getElementById('add-whitelist-form').style.display = 'block';
+        document.getElementById('whitelist-form').reset();
+    }
+
+    hideAddWhitelistForm() {
+        document.getElementById('add-whitelist-form').style.display = 'none';
+    }
+
+    async approveAndWhitelist(phoneNumber) {
+        const name = prompt(`Add name for ${phoneNumber} (optional):`);
+        const notes = prompt('Add notes (optional):');
+        
+        const response = await this.apiCall('/whitelist', 'POST', {
+            phone_number: phoneNumber,
+            name: name || '',
+            notes: notes || ''
+        });
+        
+        if (response?.success) {
+            this.showToast(`✅ ${phoneNumber} added to whitelist!`, 'success');
+            this.loadWhitelist();
+        }
+    }
+
+    async removeFromWhitelist(phoneNumber) {
+        if (!confirm(`Remove ${phoneNumber} from whitelist?\n\nThey will no longer receive automatic responses.`)) {
+            return;
+        }
+        
+        const response = await this.apiCall(`/whitelist/${encodeURIComponent(phoneNumber)}`, 'DELETE');
+        
+        if (response?.success) {
+            this.showToast(`${phoneNumber} removed from whitelist`, 'success');
+            this.loadWhitelist();
+        }
+    }
+
+    // ============= Inbox Management =============
+    async loadInbox() {
+        const response = await this.apiCall('/messages?limit=500');
+        if (response?.success) {
+            this.displayInbox(response.data);
+        }
+    }
+
+    displayInbox(messages) {
+        // Group messages by phone number
+        const conversations = {};
+        
+        messages.forEach(msg => {
+            if (!conversations[msg.from_number]) {
+                conversations[msg.from_number] = {
+                    phone: msg.from_number,
+                    messages: [],
+                    lastMessage: null,
+                    lastTimestamp: null,
+                    unreadCount: 0
+                };
+            }
+            
+            conversations[msg.from_number].messages.push(msg);
+            
+            // Track last message and timestamp
+            const msgTime = new Date(msg.timestamp);
+            if (!conversations[msg.from_number].lastTimestamp || msgTime > conversations[msg.from_number].lastTimestamp) {
+                conversations[msg.from_number].lastTimestamp = msgTime;
+                conversations[msg.from_number].lastMessage = msg;
+            }
+        });
+        
+        // Sort by most recent
+        const sortedConversations = Object.values(conversations).sort((a, b) => {
+            return b.lastTimestamp - a.lastTimestamp;
+        });
+        
+        this.displayConversationList(sortedConversations);
+    }
+
+    displayConversationList(conversations) {
+        const container = document.getElementById('conversation-list-items');
+        const countElement = document.getElementById('inbox-conversation-count');
+        
+        countElement.textContent = `${conversations.length} chats`;
+        
+        if (conversations.length === 0) {
+            container.innerHTML = '<div class="text-muted" style="padding: 2rem; text-align: center;">No conversations yet</div>';
+            return;
+        }
+        
+        container.innerHTML = conversations.map(conv => {
+            const lastMsg = conv.lastMessage;
+            const preview = lastMsg.response_text ? 
+                `You: ${lastMsg.response_text.substring(0, 40)}...` : 
+                lastMsg.message_text.substring(0, 40) + '...';
+            
+            return `
+                <div class="conversation-item" data-phone="${this.escapeHtml(conv.phone)}" onclick="app.openChat('${this.escapeHtml(conv.phone)}')">
+                    <div class="conversation-header">
+                        <div class="conversation-contact">📱 ${this.escapeHtml(conv.phone)}</div>
+                        <div class="conversation-time">${this.formatDate(lastMsg.timestamp)}</div>
+                    </div>
+                    <div class="conversation-preview">${this.escapeHtml(preview)}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async openChat(phoneNumber) {
+        // Highlight selected conversation
+        document.querySelectorAll('.conversation-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        const selectedItem = document.querySelector(`[data-phone="${phoneNumber}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('active');
+        }
+        
+        // Show chat view
+        document.getElementById('chat-empty-state').style.display = 'none';
+        document.getElementById('chat-active').style.display = 'flex';
+        
+        // Update header
+        document.getElementById('active-chat-name').textContent = phoneNumber;
+        document.getElementById('active-chat-number').textContent = phoneNumber;
+        
+        // Load messages for this number
+        const response = await this.apiCall(`/messages/${encodeURIComponent(phoneNumber)}?limit=100`);
+        if (response?.success) {
+            this.displayChatMessages(response.data);
+        }
+    }
+
+    displayChatMessages(messages) {
+        const container = document.getElementById('chat-messages-container');
+        
+        if (messages.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No messages yet</div>';
+            return;
+        }
+        
+        // Sort messages by timestamp (oldest first)
+        const sortedMessages = [...messages].sort((a, b) => {
+            return new Date(a.timestamp) - new Date(b.timestamp);
+        });
+        
+        container.innerHTML = '';
+        
+        sortedMessages.forEach(msg => {
+            // Incoming message
+            container.innerHTML += `
+                <div class="chat-message incoming">
+                    <div class="message-bubble">
+                        <div class="message-content">${this.escapeHtml(msg.message_text)}</div>
+                        <div class="message-meta">
+                            <span class="message-time">${this.formatTime(msg.timestamp)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Outgoing message (if replied)
+            if (msg.response_text && msg.response_text.trim()) {
+                const deliveryStatus = msg.status === 'replied' ? 'delivered' : 'sent';
+                const checkmarks = msg.status === 'replied' ? '✓✓' : '✓';
+                
+                container.innerHTML += `
+                    <div class="chat-message outgoing">
+                        <div class="message-bubble">
+                            <div class="message-content">${this.escapeHtml(msg.response_text)}</div>
+                            <div class="message-meta">
+                                <span class="message-time">${this.formatTime(msg.timestamp)}</span>
+                                <span class="message-status ${deliveryStatus}">${checkmarks}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        // Scroll to bottom
+        setTimeout(() => {
+            container.scrollTop = container.scrollHeight;
+        }, 100);
+    }
+
+    closeChat() {
+        document.getElementById('chat-empty-state').style.display = 'flex';
+        document.getElementById('chat-active').style.display = 'none';
+        document.querySelectorAll('.conversation-item').forEach(item => {
+            item.classList.remove('active');
+        });
+    }
+
+    formatTime(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Auto-refresh inbox
+    startInboxAutoRefresh() {
+        const checkbox = document.getElementById('auto-refresh-inbox');
+        if (!checkbox) return;
+        
+        if (checkbox.checked && this.currentPage === 'inbox') {
+            this.autoRefreshInterval = setInterval(() => {
+                if (this.currentPage === 'inbox') {
+                    this.loadInbox();
+                }
+            }, 3000); // 3 seconds
+        } else {
+            if (this.autoRefreshInterval) {
+                clearInterval(this.autoRefreshInterval);
+                this.autoRefreshInterval = null;
+            }
+        }
+    }
+}
+
+// Initialize the app
+const app = new WhatsAppAssistant();
+
+// Update navigateTo to handle inbox
+const originalNavigateTo2 = WhatsAppAssistant.prototype.navigateTo;
+WhatsAppAssistant.prototype.navigateTo = function(page) {
+    // Clear auto-refresh when leaving inbox
+    if (this.currentPage === 'inbox' && page !== 'inbox') {
+        if (this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+        }
+    }
+    
+    // Update active nav item
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.dataset.page === page) {
+            item.classList.add('active');
+        }
+    });
+
+    // Update active page
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.remove('active');
+    });
+    document.getElementById(`${page}-page`).classList.add('active');
+
+    this.currentPage = page;
+
+    // Load page data
+    switch (page) {
+        case 'dashboard':
+            this.loadDashboard();
+            break;
+        case 'inbox':
+            this.loadInbox();
+            this.startInboxAutoRefresh();
+            break;
+        case 'knowledge':
+            this.loadKnowledge();
+            break;
+        case 'settings':
+            this.loadSettings();
+            break;
+        case 'messages':
+            this.loadMessages();
+            break;
+        case 'whitelist':
+            this.loadWhitelist();
+            break;
+    }
+};
+
+// Setup auto-refresh checkbox listener for inbox
+document.addEventListener('DOMContentLoaded', () => {
+    const inboxCheckbox = document.getElementById('auto-refresh-inbox');
+    if (inboxCheckbox) {
+        inboxCheckbox.addEventListener('change', () => {
+            if (app.currentPage === 'inbox') {
+                app.startInboxAutoRefresh();
+            }
+        });
+    }
+});

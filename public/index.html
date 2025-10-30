@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp AI Assistant - Admin Panel</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🤖 AI Assistant</h1>
+                <p>WhatsApp Knowledge Center</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <span class="icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-page="knowledge">
+                    <span class="icon">📚</span>
+                    <span>Knowledge Base</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <span class="icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+                <a href="#" class="nav-item" data-page="inbox">
+                    <span class="icon">📥</span>
+                    <span>Inbox</span>
+                </a>
+                <a href="#" class="nav-item" data-page="messages">
+                    <span class="icon">💬</span>
+                    <span>Message History</span>
+                </a>
+                <a href="#" class="nav-item" data-page="whitelist">
+                    <span class="icon">✅</span>
+                    <span>Whitelist</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <div class="page-header">
+                    <h2>Sexy mama on autopilot.</h2>
+                    <div class="header-actions">
+                        <button class="btn btn-refresh" onclick="app.loadDashboard()">🔄 Refresh</button>
+                    </div>
+                </div>
+
+                <!-- System Status Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>System Status</h3>
+                        <div class="status-toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="master-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span id="status-label">Disabled</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="api-status-grid">
+                            <div class="api-status-item">
+                                <div class="status-icon" id="server-status">⚪</div>
+                                <div class="status-info">
+                                    <div class="status-name">Server</div>
+                                    <div class="status-text" id="server-status-text">Checking...</div>
+                                </div>
+                            </div>
+                            <div class="api-status-item">
+                                <div class="status-icon" id="whatsapp-status">⚪</div>
+                                <div class="status-info">
+                                    <div class="status-name">WhatsApp API</div>
+                                    <div class="status-text" id="whatsapp-status-text">Checking...</div>
+                                </div>
+                            </div>
+                            <div class="api-status-item">
+                                <div class="status-icon" id="grok-status">⚪</div>
+                                <div class="status-info">
+                                    <div class="status-name">Grok AI</div>
+                                    <div class="status-text" id="grok-status-text">Checking...</div>
+                                </div>
+                            </div>
+                            <div class="api-status-item">
+                                <div class="status-icon" id="database-status">⚪</div>
+                                <div class="status-info">
+                                    <div class="status-name">Database</div>
+                                    <div class="status-text" id="database-status-text">Checking...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📨</div>
+                        <div class="stat-details">
+                            <div class="stat-value" id="stat-total">0</div>
+                            <div class="stat-label">Total Messages</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-details">
+                            <div class="stat-value" id="stat-replied">0</div>
+                            <div class="stat-label">Replied</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-details">
+                            <div class="stat-value" id="stat-avg-time">0s</div>
+                            <div class="stat-label">Avg Response Time</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-details">
+                            <div class="stat-value" id="stat-knowledge">0</div>
+                            <div class="stat-label">Knowledge Entries</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Messages -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Recent Messages</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-messages" class="message-list">
+                            <p class="text-muted">Loading messages...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inbox Page -->
+            <div id="inbox-page" class="page">
+                <div class="page-header">
+                    <h2>📥 Inbox</h2>
+                    <div class="header-actions">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="auto-refresh-inbox" checked>
+                            <span>Auto-refresh (3s)</span>
+                        </label>
+                        <button class="btn btn-refresh" onclick="app.loadInbox()">🔄 Refresh</button>
+                    </div>
+                </div>
+
+                <div class="inbox-container">
+                    <!-- Conversation List (Left Side) -->
+                    <div class="conversation-list">
+                        <div class="conversation-list-header">
+                            <h3>Conversations</h3>
+                            <span class="conversation-count" id="inbox-conversation-count">0 chats</span>
+                        </div>
+                        <div id="conversation-list-items">
+                            <p class="text-muted" style="padding: 2rem; text-align: center;">Loading conversations...</p>
+                        </div>
+                    </div>
+
+                    <!-- Chat View (Right Side) -->
+                    <div class="chat-view">
+                        <div id="chat-empty-state" class="chat-empty">
+                            <div style="text-align: center; color: var(--text-secondary); padding: 4rem 2rem;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">💬</div>
+                                <h3>Select a conversation</h3>
+                                <p>Choose a chat from the left to view messages</p>
+                            </div>
+                        </div>
+                        
+                        <div id="chat-active" class="chat-active" style="display: none;">
+                            <div class="chat-header">
+                                <div class="chat-header-info">
+                                    <div class="chat-contact-name" id="active-chat-name">Contact</div>
+                                    <div class="chat-contact-number" id="active-chat-number">+1234567890</div>
+                                </div>
+                                <div class="chat-header-actions">
+                                    <button class="btn btn-sm btn-secondary" onclick="app.closeChat()">✕ Close</button>
+                                </div>
+                            </div>
+                            <div class="chat-messages" id="chat-messages-container">
+                                <!-- Messages will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Knowledge Base Page -->
+            <div id="knowledge-page" class="page">
+                <div class="page-header">
+                    <h2>Knowledge Base</h2>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="app.showKnowledgeForm()">➕ Add Knowledge</button>
+                    </div>
+                </div>
+
+                <!-- Knowledge Editor Form -->
+                <div id="knowledge-form" class="card" style="display: none;">
+                    <div class="card-header">
+                        <h3 id="form-title">Add New Knowledge</h3>
+                        <button class="btn-close" onclick="app.hideKnowledgeForm()">✕</button>
+                    </div>
+                    <div class="card-body">
+                        <form id="knowledge-edit-form">
+                            <input type="hidden" id="edit-id">
+                            <div class="form-group">
+                                <label for="knowledge-title">Title</label>
+                                <input type="text" id="knowledge-title" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="knowledge-content">Content</label>
+                                <textarea id="knowledge-content" class="form-control" rows="6" required></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="knowledge-category">Category</label>
+                                    <input type="text" id="knowledge-category" class="form-control" value="General">
+                                </div>
+                                <div class="form-group">
+                                    <label for="knowledge-tags">Tags (comma-separated)</label>
+                                    <input type="text" id="knowledge-tags" class="form-control" placeholder="tag1, tag2, tag3">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">💾 Save</button>
+                                <button type="button" class="btn btn-secondary" onclick="app.hideKnowledgeForm()">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="card">
+                    <div class="card-body">
+                        <input type="text" id="knowledge-search" class="form-control" placeholder="🔍 Search knowledge base...">
+                    </div>
+                </div>
+
+                <!-- Knowledge List -->
+                <div id="knowledge-list" class="knowledge-grid">
+                    <p class="text-muted">Loading knowledge base...</p>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings-page" class="page">
+                <div class="page-header">
+                    <h2>Settings</h2>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="app.saveSettings()">💾 Save Settings</button>
+                    </div>
+                </div>
+
+                <form id="settings-form">
+                    <!-- Auto Reply Settings -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Auto-Reply Settings</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label class="toggle-label">
+                                    <span>Enable Auto-Reply</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="auto_reply_enabled" id="setting-auto-reply">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </label>
+                                <small>When enabled, the bot will automatically respond to incoming messages.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-delay">Response Delay (seconds)</label>
+                                <input type="number" name="response_delay" id="setting-delay" class="form-control" min="0" max="300" value="2">
+                                <small>Wait time before sending a response (more natural conversation).</small>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="setting-hours-start">Active Hours Start</label>
+                                    <input type="time" name="active_hours_start" id="setting-hours-start" class="form-control" value="00:00">
+                                </div>
+                                <div class="form-group">
+                                    <label for="setting-hours-end">Active Hours End</label>
+                                    <input type="time" name="active_hours_end" id="setting-hours-end" class="form-control" value="23:59">
+                                </div>
+                            </div>
+                            <small>The bot will only respond during these hours.</small>
+                        </div>
+                    </div>
+
+                    <!-- Personalization Settings -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>✨ Your Personal Assistant - Write Like YOU</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="background: #e3f2fd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                                <strong>💡 Tip:</strong> Fill these out so the AI writes EXACTLY like you. It will use first-person and mimic your style perfectly!
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-my-name">Your Name</label>
+                                <input type="text" name="my_name" id="setting-my-name" class="form-control" placeholder="e.g., David">
+                                <small>The AI will know it's responding as you.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-my-personality">Your Personality</label>
+                                <input type="text" name="my_personality" id="setting-my-personality" class="form-control" placeholder="e.g., Friendly, casual, direct, humorous">
+                                <small>Describe how you typically are in conversations.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-my-style">Your Writing Style</label>
+                                <input type="text" name="my_writing_style" id="setting-my-style" class="form-control" placeholder="e.g., Short messages, lots of emojis, informal">
+                                <small>How do you usually text? Short/long? Formal/casual?</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-my-phrases">Common Phrases You Use</label>
+                                <textarea name="my_common_phrases" id="setting-my-phrases" class="form-control" rows="3" placeholder="e.g., 'What's up', 'Sounds good', 'Let me know'"></textarea>
+                                <small>Words or phrases you often use. The AI will naturally include them.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Settings -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>AI Configuration</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="setting-temperature">
+                                    AI Creativity (Temperature: <span id="temp-value">0.8</span>)
+                                </label>
+                                <input type="range" name="ai_temperature" id="setting-temperature" class="form-range" min="0" max="1" step="0.1" value="0.8">
+                                <small>Higher = more natural and varied responses (recommended: 0.7-0.9)</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setting-system-prompt">System Prompt (Advanced)</label>
+                                <textarea name="system_prompt" id="setting-system-prompt" class="form-control" rows="5" placeholder="You are ME..."></textarea>
+                                <small>Core instructions for how the AI writes as you. Default is optimized for personal assistant use.</small>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Messages Page -->
+            <div id="messages-page" class="page">
+                <div class="page-header">
+                    <h2>Message History</h2>
+                    <div class="header-actions">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="auto-refresh-messages" checked>
+                            <span>Auto-refresh (5s)</span>
+                        </label>
+                        <button class="btn btn-refresh" onclick="app.loadMessages()">🔄 Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>All Conversations</h3>
+                        <div class="message-stats">
+                            <span class="stat-badge" id="total-conversations">0 messages</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="message-history" class="message-history-list">
+                            <p class="text-muted">Loading message history...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Whitelist Page -->
+            <div id="whitelist-page" class="page">
+                <div class="page-header">
+                    <h2>Whitelist Management</h2>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="app.showAddWhitelistForm()">➕ Add Number</button>
+                    </div>
+                </div>
+
+                <div class="card" style="background: #fff3cd; border-color: #ffc107; margin-bottom: 1.5rem;">
+                    <div class="card-body">
+                        <strong>ℹ️ Whitelist Info:</strong> Only numbers on this whitelist will receive automatic AI responses. 
+                        Messages from non-whitelisted numbers will be logged and shown in Message History where you can manually approve them.
+                    </div>
+                </div>
+
+                <!-- Add Number Form -->
+                <div id="add-whitelist-form" class="card" style="display: none;">
+                    <div class="card-header">
+                        <h3>Add Number to Whitelist</h3>
+                        <button class="btn-close" onclick="app.hideAddWhitelistForm()">✕</button>
+                    </div>
+                    <div class="card-body">
+                        <form id="whitelist-form">
+                            <div class="form-group">
+                                <label for="whitelist-phone">Phone Number *</label>
+                                <input type="tel" id="whitelist-phone" class="form-control" placeholder="+1234567890" required>
+                                <small>Include country code (e.g., +628112656869)</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="whitelist-name">Name (Optional)</label>
+                                <input type="text" id="whitelist-name" class="form-control" placeholder="John Doe">
+                            </div>
+                            <div class="form-group">
+                                <label for="whitelist-notes">Notes (Optional)</label>
+                                <textarea id="whitelist-notes" class="form-control" rows="2" placeholder="Add any notes..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">✅ Add to Whitelist</button>
+                                <button type="button" class="btn btn-secondary" onclick="app.hideAddWhitelistForm()">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Whitelist Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Whitelisted Numbers</h3>
+                        <span class="stat-badge" id="whitelist-count">0 numbers</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="whitelist-list">
+                            <p class="text-muted">Loading whitelist...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pending Messages (Not Whitelisted) -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Pending Approval (Not Whitelisted)</h3>
+                        <span class="stat-badge" id="pending-count">0 pending</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="pending-messages">
+                            <p class="text-muted">Loading pending messages...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
+
