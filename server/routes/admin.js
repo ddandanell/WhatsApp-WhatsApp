@@ -213,6 +213,29 @@ router.get('/stats', (req, res) => {
   }
 });
 
+// Get recent messages for chat list
+router.get('/messages/recent', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const messages = models.messages.getAll();
+    // Return most recent messages, limited
+    const recent = messages.slice(0, limit);
+    res.json({ success: true, data: recent });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get messages stats for dashboard
+router.get('/messages/stats', (req, res) => {
+  try {
+    const stats = models.messages.getStats();
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============= Whitelist Routes =============
 
 // Get all whitelisted numbers

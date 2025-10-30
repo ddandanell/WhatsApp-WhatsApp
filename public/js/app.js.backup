@@ -8,22 +8,91 @@ class WhatsAppAssistant {
         this.init();
     }
 
-    init() {
-        this.setupAuth();
-        this.setupNavigation();
+    async init() {
         this.setupEventListeners();
-        this.loadDashboard();
-        this.startStatusMonitoring();
+        this.setupNavigation();
+        
+        // Check if already logged in
+        const isAuthenticated = await this.checkAuth();
+        if (isAuthenticated) {
+            this.showDashboard();
+            this.loadDashboard();
+            this.startStatusMonitoring();
+        } else {
+            this.showLogin();
+        }
     }
 
     // ============= Authentication =============
-    setupAuth() {
-        // No authentication required for testing
-        console.log('Authentication disabled - direct access enabled');
+    async checkAuth() {
+        try {
+            const response = await fetch(`${this.apiBase}/auth/status`, {
+                credentials: 'include'
+            });
+            const result = await response.json();
+            return result.authenticated || false;
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            return false;
+        }
     }
 
-    promptAuth() {
-        // Not needed for testing
+    showLogin() {
+        document.getElementById('login-container').style.display = 'flex';
+        document.getElementById('app-container').style.display = 'none';
+    }
+
+    showDashboard() {
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'flex';
+    }
+
+    async login(username, password) {
+        try {
+            const response = await fetch(`${this.apiBase}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ username, password })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showDashboard();
+                this.loadDashboard();
+                this.startStatusMonitoring();
+                return { success: true };
+            } else {
+                return { success: false, error: result.error || 'Login failed' };
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            return { success: false, error: 'Network error' };
+        }
+    }
+
+    async logout() {
+        try {
+            await fetch(`${this.apiBase}/logout`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            // Clear intervals
+            if (this.statusCheckInterval) clearInterval(this.statusCheckInterval);
+            if (this.autoRefreshInterval) clearInterval(this.autoRefreshInterval);
+
+            // Show login screen
+            this.showLogin();
+
+            // Clear login form
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('login-error').style.display = 'none';
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     }
 
     getHeaders() {
@@ -37,7 +106,8 @@ class WhatsAppAssistant {
         try {
             const options = {
                 method,
-                headers: this.getHeaders()
+                headers: this.getHeaders(),
+                credentials: 'include' // Include cookies for authentication
             };
 
             if (data) {
@@ -432,11 +502,6 @@ class WhatsAppAssistant {
         };
         return text.replace(/[&<>"']/g, m => map[m]);
     }
-}
-
-// Initialize the app
-const app = new WhatsAppAssistant();
-
 
     // ============= API Status Monitoring =============
     async startStatusMonitoring() {
@@ -619,27 +684,6 @@ const app = new WhatsAppAssistant();
             this.displayMessagesEnhanced(response.data);
         }
     }
-}
-
-// Update the existing loadMessages call in navigateTo
-const originalNavigateTo = WhatsAppAssistant.prototype.navigateTo;
-WhatsAppAssistant.prototype.navigateTo = function(page) {
-    // Clear auto-refresh when leaving messages page
-    if (this.currentPage === 'messages' && page !== 'messages') {
-        if (this.autoRefreshInterval) {
-            clearInterval(this.autoRefreshInterval);
-            this.autoRefreshInterval = null;
-        }
-    }
-    
-    // Call original method
-    originalNavigateTo.call(this, page);
-    
-    // Start auto-refresh when entering messages page
-    if (page === 'messages') {
-        this.startAutoRefresh();
-    }
-};
 
     // ============= Whitelist Management =============
     async loadWhitelist() {
@@ -780,37 +824,6 @@ WhatsAppAssistant.prototype.navigateTo = function(page) {
             this.loadWhitelist();
         }
     }
-}
-
-// Add whitelist form submission handler
-document.addEventListener('DOMContentLoaded', () => {
-    const whitelistForm = document.getElementById('whitelist-form');
-    if (whitelistForm) {
-        whitelistForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const phone = document.getElementById('whitelist-phone').value;
-            const name = document.getElementById('whitelist-name').value;
-            const notes = document.getElementById('whitelist-notes').value;
-            
-            const response = await app.apiCall('/whitelist', 'POST', {
-                phone_number: phone,
-                name: name,
-                notes: notes
-            });
-            
-            if (response?.success) {
-                if (response.alreadyExists) {
-                    app.showToast('Number already in whitelist', 'warning');
-                } else {
-                    app.showToast('Number added to whitelist successfully!', 'success');
-                }
-                app.hideAddWhitelistForm();
-                app.loadWhitelist();
-            }
-        });
-    }
-});
 
     // ============= Inbox Management =============
     async loadInbox() {
@@ -991,7 +1004,160 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
+
+    // ============= Send Messages =============
+    loadSendPage() {
+        // Setup form listeners if not already set
+        this.setupSendMessageForms();
+    }
+
+    setupSendMessageForms() {
+        // Send single message form
+        const sendForm = document.getElementById('send-message-form');
+        if (sendForm && !sendForm.dataset.listenerAdded) {
+            sendForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.sendSingleMessage();
+            });
+            sendForm.dataset.listenerAdded = 'true';
+        }
+
+        // Start conversation form
+        const convForm = document.getElementById('start-conversation-form');
+        if (convForm && !convForm.dataset.listenerAdded) {
+            convForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.startConversation();
+            });
+            convForm.dataset.listenerAdded = 'true';
+        }
+
+        // Custom opener toggle
+        const openerSelect = document.getElementById('conv-opener');
+        if (openerSelect && !openerSelect.dataset.listenerAdded) {
+            openerSelect.addEventListener('change', (e) => {
+                const customGroup = document.getElementById('custom-opener-group');
+                customGroup.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            });
+            openerSelect.dataset.listenerAdded = 'true';
+        }
+    }
+
+    async sendSingleMessage() {
+        const phoneNumber = document.getElementById('send-phone').value;
+        const message = document.getElementById('send-message').value;
+        const resultDiv = document.getElementById('send-result');
+
+        if (!phoneNumber || !message) {
+            resultDiv.innerHTML = '<div class="alert alert-error">Please fill in all fields</div>';
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="alert alert-info">Sending message...</div>';
+
+        const result = await this.apiCall('/send-message', 'POST', { phoneNumber, message });
+
+        if (result.success) {
+            resultDiv.innerHTML = '<div class="alert alert-success">✅ Message sent successfully!</div>';
+            document.getElementById('send-message-form').reset();
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 3000);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error || 'Failed to send message'}</div>`;
+        }
+    }
+
+    async startConversation() {
+        const phoneNumber = document.getElementById('conv-phone').value;
+        const openerSelect = document.getElementById('conv-opener');
+        let opener = openerSelect.value;
+        
+        if (opener === 'custom') {
+            opener = document.getElementById('conv-custom').value;
+            if (!opener) {
+                document.getElementById('conversation-result').innerHTML = '<div class="alert alert-error">Please enter a custom message</div>';
+                return;
+            }
+        }
+
+        const autoContinue = document.getElementById('conv-auto-continue').checked;
+        const resultDiv = document.getElementById('conversation-result');
+
+        if (!phoneNumber) {
+            resultDiv.innerHTML = '<div class="alert alert-error">Please enter a phone number</div>';
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="alert alert-info">🚀 Starting conversation...</div>';
+
+        const result = await this.apiCall('/start-conversation', 'POST', { 
+            phoneNumber, 
+            opener, 
+            autoContinue 
+        });
+
+        if (result.success) {
+            let message = '✅ Conversation started!<br>';
+            message += `📤 Sent: "${opener}"<br>`;
+            if (autoContinue) {
+                message += '🤖 AI will automatically continue the conversation';
+            }
+            resultDiv.innerHTML = `<div class="alert alert-success">${message}</div>`;
+            document.getElementById('start-conversation-form').reset();
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error || 'Failed to start conversation'}</div>`;
+        }
+    }
+
+    async quickMessage(type) {
+        const messages = {
+            girlfriend: {
+                phone: '+628112656869', // Your girlfriend's number
+                text: 'Hey baby, what are you up to?'
+            },
+            checkIn: {
+                phone: '+628112656869',
+                text: 'Hey! How are you?'
+            },
+            whereAreYou: {
+                phone: '+628112656869',
+                text: 'Where are you?'
+            },
+            goodMorning: {
+                phone: '+628112656869',
+                text: 'Good morning baby ☀️'
+            }
+        };
+
+        const msg = messages[type];
+        if (!msg) return;
+
+        // Navigate to send page and fill in the form
+        this.navigateTo('send');
+        
+        setTimeout(() => {
+            document.getElementById('send-phone').value = msg.phone;
+            document.getElementById('send-message').value = msg.text;
+            
+            // Show a notification
+            const resultDiv = document.getElementById('send-result');
+            resultDiv.innerHTML = '<div class="alert alert-info">💡 Quick message loaded! Click "Send Message" to send it.</div>';
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 3000);
+        }, 100);
+    }
 }
+
+// Initialize the app
+const app = new WhatsAppAssistant();
 
 // Update navigateTo to handle inbox
 const originalNavigateTo2 = WhatsAppAssistant.prototype.navigateTo;
@@ -1041,8 +1207,36 @@ WhatsAppAssistant.prototype.navigateTo = function(page) {
         case 'whitelist':
             this.loadWhitelist();
             break;
+        case 'send':
+            this.loadSendPage();
+            break;
     }
 };
+
+// Setup login form
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            // Hide previous errors
+            errorDiv.style.display = 'none';
+            
+            // Attempt login
+            const result = await app.login(username, password);
+            
+            if (!result.success) {
+                errorDiv.textContent = result.error || 'Login failed';
+                errorDiv.style.display = 'block';
+            }
+        });
+    }
+});
 
 // Setup auto-refresh checkbox listener for inbox
 document.addEventListener('DOMContentLoaded', () => {

@@ -3,650 +3,698 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp AI Assistant - Admin Panel</title>
+    <title>WhatsApp AI Dashboard - David's Assistant</title>
     <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #111b21;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* WhatsApp Container */
+        .whatsapp-container {
+            display: flex;
+            height: 100vh;
+            max-width: 1600px;
+            margin: 0 auto;
+            background: #111b21;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 400px;
+            background: #111b21;
+            border-right: 1px solid #2a3942;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 15px 20px;
+            background: #202c33;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #2a3942;
+        }
+
+        .sidebar-header h1 {
+            color: #e9edef;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 20px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            color: #aebac1;
+            cursor: pointer;
+            font-size: 1.4rem;
+            padding: 5px;
+            transition: color 0.3s;
+        }
+
+        .icon-btn:hover {
+            color: #e9edef;
+        }
+
+        .search-bar {
+            padding: 10px 15px;
+            background: #202c33;
+            border-bottom: 1px solid #2a3942;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 40px 10px 15px;
+            background: #202c33;
+            border: 1px solid #2a3942;
+            border-radius: 8px;
+            color: #e9edef;
+            font-size: 0.9rem;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #00a884;
+        }
+
+        /* Chat List */
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+            background: #111b21;
+        }
+
+        .chat-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #2a3942;
+            transition: background 0.3s;
+        }
+
+        .chat-item:hover {
+            background: #202c33;
+        }
+
+        .chat-item.active {
+            background: #2a3942;
+        }
+
+        .chat-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #00a884;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chat-name {
+            color: #e9edef;
+            font-weight: 500;
+            font-size: 1rem;
+            margin-bottom: 3px;
+        }
+
+        .chat-preview {
+            color: #8696a0;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 5px;
+        }
+
+        .chat-time {
+            color: #8696a0;
+            font-size: 0.75rem;
+        }
+
+        .autopilot-badge {
+            background: #00a884;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .autopilot-badge.off {
+            background: #667781;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0b141a;
+        }
+
+        .chat-header {
+            padding: 10px 20px;
+            background: #202c33;
+            border-bottom: 1px solid #2a3942;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .chat-header-name {
+            color: #e9edef;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .chat-header-status {
+            color: #8696a0;
+            font-size: 0.85rem;
+        }
+
+        .autopilot-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-label {
+            color: #e9edef;
+            font-size: 0.9rem;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #667781;
+            transition: .4s;
+            border-radius: 26px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #00a884;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Messages Container */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%230b141a" width="100" height="100"/></svg>');
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.sent {
+            justify-content: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 65%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .message.received .message-bubble {
+            background: #202c33;
+            color: #e9edef;
+        }
+
+        .message.sent .message-bubble {
+            background: #005c4b;
+            color: #e9edef;
+        }
+
+        .message-text {
+            word-wrap: break-word;
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            color: #8696a0;
+            text-align: right;
+        }
+
+        /* Message Input */
+        .message-input-container {
+            padding: 10px 20px;
+            background: #202c33;
+            border-top: 1px solid #2a3942;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 10px 15px;
+            background: #2a3942;
+            border: none;
+            border-radius: 8px;
+            color: #e9edef;
+            font-size: 0.95rem;
+        }
+
+        .message-input:focus {
+            outline: none;
+        }
+
+        .send-btn {
+            background: #00a884;
+            border: none;
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: background 0.3s;
+        }
+
+        .send-btn:hover {
+            background: #06cf9c;
+        }
+
+        .send-btn:disabled {
+            background: #667781;
+            cursor: not-allowed;
+        }
+
+        /* Empty State */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #8696a0;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state-icon {
+            font-size: 6rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-state h2 {
+            color: #e9edef;
+            margin-bottom: 10px;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            padding: 10px 15px;
+            background: #202c33;
+            border-bottom: 1px solid #2a3942;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            color: #00a884;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .stat-label {
+            color: #8696a0;
+            font-size: 0.75rem;
+            margin-top: 2px;
+        }
+
+        /* Settings Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #202c33;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #2a3942;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            color: #e9edef;
+            font-size: 1.3rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #8696a0;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            color: #e9edef;
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 10px;
+            background: #2a3942;
+            border: 1px solid #374854;
+            border-radius: 6px;
+            color: #e9edef;
+            font-size: 0.9rem;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #00a884;
+        }
+
+        .btn-primary {
+            background: #00a884;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            width: 100%;
+            transition: background 0.3s;
+        }
+
+        .btn-primary:hover {
+            background: #06cf9c;
+        }
+
+        /* Login Screen */
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #00a884 0%, #005c4b 100%);
+        }
+
+        .login-box {
+            background: #202c33;
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h1 {
+            color: #e9edef;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .login-header p {
+            color: #8696a0;
+            font-size: 0.95rem;
+        }
+
+        .login-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        .login-error {
+            background: #ff4444;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #111b21;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #374854;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a5d6a;
+        }
+    </style>
 </head>
 <body>
     <!-- Login Screen -->
     <div id="login-container" class="login-container">
         <div class="login-box">
             <div class="login-header">
-                <h1>🤖 WhatsApp AI Assistant</h1>
-                <p>Admin Panel Login</p>
+                <h1>💬 WhatsApp AI</h1>
+                <p>David's Automated Assistant</p>
             </div>
             <form id="login-form" class="login-form">
                 <div class="form-group">
-                    <label for="login-username">Username</label>
-                    <input type="text" id="login-username" name="username" class="form-control" placeholder="Enter username" required autofocus>
+                    <label class="form-label">Username</label>
+                    <input type="text" id="login-username" class="form-input" placeholder="Enter username" required autofocus>
                 </div>
                 <div class="form-group">
-                    <label for="login-password">Password</label>
-                    <input type="password" id="login-password" name="password" class="form-control" placeholder="Enter password" required>
+                    <label class="form-label">Password</label>
+                    <input type="password" id="login-password" class="form-input" placeholder="Enter password" required>
                 </div>
-                <div id="login-error" class="alert alert-error" style="display: none;"></div>
-                <button type="submit" class="btn btn-primary btn-block">Login</button>
+                <div id="login-error" class="login-error"></div>
+                <button type="submit" class="btn-primary">Login</button>
             </form>
         </div>
     </div>
 
-    <div class="app-container" id="app-container" style="display: none;">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
+    <!-- Main Dashboard -->
+    <div id="app-container" class="whatsapp-container" style="display: none;">
+        <!-- Sidebar -->
+        <div class="sidebar">
             <div class="sidebar-header">
-                <h1>🤖 AI Assistant</h1>
-                <p>WhatsApp Knowledge Center</p>
-            </div>
-            <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" data-page="dashboard">
-                    <span class="icon">📊</span>
-                    <span>Dashboard</span>
-                </a>
-                <a href="#" class="nav-item" data-page="knowledge">
-                    <span class="icon">📚</span>
-                    <span>Knowledge Base</span>
-                </a>
-                <a href="#" class="nav-item" data-page="settings">
-                    <span class="icon">⚙️</span>
-                    <span>Settings</span>
-                </a>
-                <a href="#" class="nav-item" data-page="send">
-                    <span class="icon">📤</span>
-                    <span>Send Messages</span>
-                </a>
-                <a href="#" class="nav-item" data-page="inbox">
-                    <span class="icon">📥</span>
-                    <span>Inbox</span>
-                </a>
-                <a href="#" class="nav-item" data-page="messages">
-                    <span class="icon">💬</span>
-                    <span>Message History</span>
-                </a>
-                <a href="#" class="nav-item" data-page="whitelist">
-                    <span class="icon">✅</span>
-                    <span>Whitelist</span>
-                </a>
-            </nav>
-            <div class="sidebar-footer">
-                <button class="btn btn-secondary btn-block" onclick="app.logout()">🚪 Logout</button>
-            </div>
-        </aside>
-
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Dashboard Page -->
-            <div id="dashboard-page" class="page active">
-                <div class="page-header">
-                    <h2>Sexy mama on autopilot.</h2>
-                    <div class="header-actions">
-                        <button class="btn btn-refresh" onclick="app.loadDashboard()">🔄 Refresh</button>
-                    </div>
-                </div>
-
-                <!-- System Status Card -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>System Status</h3>
-                        <div class="status-toggle">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="master-toggle">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span id="status-label">Disabled</span>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="api-status-grid">
-                            <div class="api-status-item">
-                                <div class="status-icon" id="server-status">⚪</div>
-                                <div class="status-info">
-                                    <div class="status-name">Server</div>
-                                    <div class="status-text" id="server-status-text">Checking...</div>
-                                </div>
-                            </div>
-                            <div class="api-status-item">
-                                <div class="status-icon" id="whatsapp-status">⚪</div>
-                                <div class="status-info">
-                                    <div class="status-name">WhatsApp API</div>
-                                    <div class="status-text" id="whatsapp-status-text">Checking...</div>
-                                </div>
-                            </div>
-                            <div class="api-status-item">
-                                <div class="status-icon" id="grok-status">⚪</div>
-                                <div class="status-info">
-                                    <div class="status-name">Grok AI</div>
-                                    <div class="status-text" id="grok-status-text">Checking...</div>
-                                </div>
-                            </div>
-                            <div class="api-status-item">
-                                <div class="status-icon" id="database-status">⚪</div>
-                                <div class="status-info">
-                                    <div class="status-name">Database</div>
-                                    <div class="status-text" id="database-status-text">Checking...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Statistics Cards -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">📨</div>
-                        <div class="stat-details">
-                            <div class="stat-value" id="stat-total">0</div>
-                            <div class="stat-label">Total Messages</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">✅</div>
-                        <div class="stat-details">
-                            <div class="stat-value" id="stat-replied">0</div>
-                            <div class="stat-label">Replied</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">⏱️</div>
-                        <div class="stat-details">
-                            <div class="stat-value" id="stat-avg-time">0s</div>
-                            <div class="stat-label">Avg Response Time</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">📚</div>
-                        <div class="stat-details">
-                            <div class="stat-value" id="stat-knowledge">0</div>
-                            <div class="stat-label">Knowledge Entries</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Messages -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Recent Messages</h3>
-                    </div>
-                    <div class="card-body">
-                        <div id="recent-messages" class="message-list">
-                            <p class="text-muted">Loading messages...</p>
-                        </div>
-                    </div>
+                <h1>WhatsApp AI</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="app.openSettings()" title="Settings">⚙️</button>
+                    <button class="icon-btn" onclick="app.logout()" title="Logout">🚪</button>
                 </div>
             </div>
 
-            <!-- Send Messages Page -->
-            <div id="send-page" class="page">
-                <div class="page-header">
-                    <h2>📤 Send Messages</h2>
-                    <p class="page-subtitle">Send messages and start conversations directly from the dashboard</p>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-chats">0</div>
+                    <div class="stat-label">Active Chats</div>
                 </div>
-
-                <!-- Send Single Message -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>📨 Send Single Message</h3>
-                    </div>
-                    <div class="card-body">
-                        <form id="send-message-form">
-                            <div class="form-group">
-                                <label for="send-phone">Phone Number (with country code)</label>
-                                <input type="tel" id="send-phone" class="form-control" placeholder="+62 811-2656-869" required>
-                                <small>Format: +country-code phone-number (e.g. +62 8112656869)</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="send-message">Message</label>
-                                <textarea id="send-message" class="form-control" rows="4" placeholder="Type your message here..." required></textarea>
-                                <small>The message will be sent as David (using your personality)</small>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary">
-                                <span>📤 Send Message</span>
-                            </button>
-                        </form>
-
-                        <div id="send-result" style="margin-top: 1rem;"></div>
-                    </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-messages">0</div>
+                    <div class="stat-label">Today</div>
                 </div>
-
-                <!-- Start Automated Conversation -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>🤖 Start Automated Conversation</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="background: #e3f2fd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                            <strong>💡 What does this do?</strong>
-                            <p style="margin: 0.5rem 0 0 0;">This will send an initial message like "Hey, how are you?" and then the AI will automatically continue the conversation naturally, asking follow-up questions and chatting like you would.</p>
-                        </div>
-
-                        <form id="start-conversation-form">
-                            <div class="form-group">
-                                <label for="conv-phone">Phone Number (with country code)</label>
-                                <input type="tel" id="conv-phone" class="form-control" placeholder="+62 811-2656-869" required>
-                                <small>The number to start a conversation with</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="conv-opener">Conversation Starter</label>
-                                <select id="conv-opener" class="form-control">
-                                    <option value="Hey! How are you?">Hey! How are you?</option>
-                                    <option value="Hey baby, what are you up to?">Hey baby, what are you up to?</option>
-                                    <option value="Morning! How's your day going?">Morning! How's your day going?</option>
-                                    <option value="Hey, thinking about you :))">Hey, thinking about you :))</option>
-                                    <option value="What are you doing?">What are you doing?</option>
-                                    <option value="Where are you?">Where are you?</option>
-                                    <option value="custom">Custom message...</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group" id="custom-opener-group" style="display: none;">
-                                <label for="conv-custom">Custom Opening Message</label>
-                                <textarea id="conv-custom" class="form-control" rows="2" placeholder="Type your custom opener..."></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="toggle-label">
-                                    <span>Auto-continue conversation</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="conv-auto-continue" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </label>
-                                <small>AI will automatically respond to their replies and keep the conversation going</small>
-                            </div>
-
-                            <button type="submit" class="btn btn-success">
-                                <span>🚀 Start Conversation</span>
-                            </button>
-                        </form>
-
-                        <div id="conversation-result" style="margin-top: 1rem;"></div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>⚡ Quick Actions</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="quick-actions-grid">
-                            <button class="quick-action-btn" onclick="app.quickMessage('girlfriend')">
-                                <span class="icon">💕</span>
-                                <span class="label">Message Girlfriend</span>
-                            </button>
-                            <button class="quick-action-btn" onclick="app.quickMessage('checkIn')">
-                                <span class="icon">👋</span>
-                                <span class="label">Quick Check-in</span>
-                            </button>
-                            <button class="quick-action-btn" onclick="app.quickMessage('whereAreYou')">
-                                <span class="icon">📍</span>
-                                <span class="label">Where are you?</span>
-                            </button>
-                            <button class="quick-action-btn" onclick="app.quickMessage('goodMorning')">
-                                <span class="icon">☀️</span>
-                                <span class="label">Good Morning</span>
-                            </button>
-                        </div>
-                    </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-autopilot">0</div>
+                    <div class="stat-label">Autopilot ON</div>
                 </div>
             </div>
 
-            <!-- Inbox Page -->
-            <div id="inbox-page" class="page">
-                <div class="page-header">
-                    <h2>📥 Inbox</h2>
-                    <div class="header-actions">
-                        <label class="auto-refresh-toggle">
-                            <input type="checkbox" id="auto-refresh-inbox" checked>
-                            <span>Auto-refresh (3s)</span>
-                        </label>
-                        <button class="btn btn-refresh" onclick="app.loadInbox()">🔄 Refresh</button>
-                    </div>
-                </div>
-
-                <div class="inbox-container">
-                    <!-- Conversation List (Left Side) -->
-                    <div class="conversation-list">
-                        <div class="conversation-list-header">
-                            <h3>Conversations</h3>
-                            <span class="conversation-count" id="inbox-conversation-count">0 chats</span>
-                        </div>
-                        <div id="conversation-list-items">
-                            <p class="text-muted" style="padding: 2rem; text-align: center;">Loading conversations...</p>
-                        </div>
-                    </div>
-
-                    <!-- Chat View (Right Side) -->
-                    <div class="chat-view">
-                        <div id="chat-empty-state" class="chat-empty">
-                            <div style="text-align: center; color: var(--text-secondary); padding: 4rem 2rem;">
-                                <div style="font-size: 4rem; margin-bottom: 1rem;">💬</div>
-                                <h3>Select a conversation</h3>
-                                <p>Choose a chat from the left to view messages</p>
-                            </div>
-                        </div>
-                        
-                        <div id="chat-active" class="chat-active" style="display: none;">
-                            <div class="chat-header">
-                                <div class="chat-header-info">
-                                    <div class="chat-contact-name" id="active-chat-name">Contact</div>
-                                    <div class="chat-contact-number" id="active-chat-number">+1234567890</div>
-                                </div>
-                                <div class="chat-header-actions">
-                                    <button class="btn btn-sm btn-secondary" onclick="app.closeChat()">✕ Close</button>
-                                </div>
-                            </div>
-                            <div class="chat-messages" id="chat-messages-container">
-                                <!-- Messages will be loaded here -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="search-bar">
+                <input type="text" class="search-input" id="search-chats" placeholder="Search conversations...">
             </div>
 
-            <!-- Knowledge Base Page -->
-            <div id="knowledge-page" class="page">
-                <div class="page-header">
-                    <h2>Knowledge Base</h2>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="app.showKnowledgeForm()">➕ Add Knowledge</button>
-                    </div>
-                </div>
-
-                <!-- Knowledge Editor Form -->
-                <div id="knowledge-form" class="card" style="display: none;">
-                    <div class="card-header">
-                        <h3 id="form-title">Add New Knowledge</h3>
-                        <button class="btn-close" onclick="app.hideKnowledgeForm()">✕</button>
-                    </div>
-                    <div class="card-body">
-                        <form id="knowledge-edit-form">
-                            <input type="hidden" id="edit-id">
-                            <div class="form-group">
-                                <label for="knowledge-title">Title</label>
-                                <input type="text" id="knowledge-title" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="knowledge-content">Content</label>
-                                <textarea id="knowledge-content" class="form-control" rows="6" required></textarea>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="knowledge-category">Category</label>
-                                    <input type="text" id="knowledge-category" class="form-control" value="General">
-                                </div>
-                                <div class="form-group">
-                                    <label for="knowledge-tags">Tags (comma-separated)</label>
-                                    <input type="text" id="knowledge-tags" class="form-control" placeholder="tag1, tag2, tag3">
-                                </div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">💾 Save</button>
-                                <button type="button" class="btn btn-secondary" onclick="app.hideKnowledgeForm()">Cancel</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Search Bar -->
-                <div class="card">
-                    <div class="card-body">
-                        <input type="text" id="knowledge-search" class="form-control" placeholder="🔍 Search knowledge base...">
-                    </div>
-                </div>
-
-                <!-- Knowledge List -->
-                <div id="knowledge-list" class="knowledge-grid">
-                    <p class="text-muted">Loading knowledge base...</p>
-                </div>
+            <div class="chat-list" id="chat-list">
+                <!-- Chats will be loaded here -->
             </div>
+        </div>
 
-            <!-- Settings Page -->
-            <div id="settings-page" class="page">
-                <div class="page-header">
-                    <h2>Settings</h2>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="app.saveSettings()">💾 Save Settings</button>
-                    </div>
-                </div>
-
-                <form id="settings-form">
-                    <!-- Auto Reply Settings -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Auto-Reply Settings</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label class="toggle-label">
-                                    <span>Enable Auto-Reply</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="auto_reply_enabled" id="setting-auto-reply">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </label>
-                                <small>When enabled, the bot will automatically respond to incoming messages.</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-delay">Response Delay (seconds)</label>
-                                <input type="number" name="response_delay" id="setting-delay" class="form-control" min="0" max="300" value="2">
-                                <small>Wait time before sending a response (more natural conversation).</small>
-                            </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="setting-hours-start">Active Hours Start</label>
-                                    <input type="time" name="active_hours_start" id="setting-hours-start" class="form-control" value="00:00">
-                                </div>
-                                <div class="form-group">
-                                    <label for="setting-hours-end">Active Hours End</label>
-                                    <input type="time" name="active_hours_end" id="setting-hours-end" class="form-control" value="23:59">
-                                </div>
-                            </div>
-                            <small>The bot will only respond during these hours.</small>
-                        </div>
-                    </div>
-
-                    <!-- Personalization Settings -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>✨ Your Personal Assistant - Write Like YOU</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="background: #e3f2fd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                                <strong>💡 Tip:</strong> Fill these out so the AI writes EXACTLY like you. It will use first-person and mimic your style perfectly!
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-my-name">Your Name</label>
-                                <input type="text" name="my_name" id="setting-my-name" class="form-control" placeholder="e.g., David">
-                                <small>The AI will know it's responding as you.</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-my-personality">Your Personality</label>
-                                <input type="text" name="my_personality" id="setting-my-personality" class="form-control" placeholder="e.g., Friendly, casual, direct, humorous">
-                                <small>Describe how you typically are in conversations.</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-my-style">Your Writing Style</label>
-                                <input type="text" name="my_writing_style" id="setting-my-style" class="form-control" placeholder="e.g., Short messages, lots of emojis, informal">
-                                <small>How do you usually text? Short/long? Formal/casual?</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-my-phrases">Common Phrases You Use</label>
-                                <textarea name="my_common_phrases" id="setting-my-phrases" class="form-control" rows="3" placeholder="e.g., 'What's up', 'Sounds good', 'Let me know'"></textarea>
-                                <small>Words or phrases you often use. The AI will naturally include them.</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- API Configuration -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>🔑 API Configuration</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid #ffc107;">
-                                <strong>🔒 Secure:</strong> API keys are stored in the database and NOT exposed in your code. Perfect for deployment to Vercel, Heroku, etc.
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-grok-key">Grok API Key (xAI)</label>
-                                <input type="password" name="grok_api_key" id="setting-grok-key" class="form-control" placeholder="xai-...">
-                                <small>Your Grok AI API key from <a href="https://console.x.ai/" target="_blank">console.x.ai</a></small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-wasender-key">Wasender API Key</label>
-                                <input type="password" name="wasender_api_key" id="setting-wasender-key" class="form-control" placeholder="Enter your WasenderAPI key">
-                                <small>Your WasenderAPI key from <a href="https://wasenderapi.com/" target="_blank">wasenderapi.com</a></small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-wasender-url">Wasender API URL</label>
-                                <input type="text" name="wasender_api_url" id="setting-wasender-url" class="form-control" placeholder="https://wasenderapi.com/api" value="https://wasenderapi.com/api">
-                                <small>Usually: https://wasenderapi.com/api</small>
-                            </div>
-
-                            <div style="margin-top: 1rem; padding: 0.75rem; background: #d1ecf1; border-radius: 6px; border-left: 4px solid #0c5460;">
-                                <small><strong>💡 Note:</strong> Changes take effect immediately. No server restart needed!</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- AI Settings -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>AI Configuration</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label for="setting-temperature">
-                                    AI Creativity (Temperature: <span id="temp-value">0.8</span>)
-                                </label>
-                                <input type="range" name="ai_temperature" id="setting-temperature" class="form-range" min="0" max="1" step="0.1" value="0.8">
-                                <small>Higher = more natural and varied responses (recommended: 0.7-0.9)</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="setting-system-prompt">System Prompt (Advanced)</label>
-                                <textarea name="system_prompt" id="setting-system-prompt" class="form-control" rows="5" placeholder="You are ME..."></textarea>
-                                <small>Core instructions for how the AI writes as you. Default is optimized for personal assistant use.</small>
-                            </div>
-                        </div>
-                    </div>
-                </form>
+        <!-- Chat Area -->
+        <div class="chat-area" id="chat-area">
+            <div class="empty-state">
+                <div class="empty-state-icon">💬</div>
+                <h2>Welcome to WhatsApp AI Dashboard</h2>
+                <p>Your AI assistant is running and will respond automatically to all incoming messages.</p>
+                <p style="margin-top: 10px;">Select a conversation to view messages or send manually.</p>
             </div>
-
-            <!-- Messages Page -->
-            <div id="messages-page" class="page">
-                <div class="page-header">
-                    <h2>Message History</h2>
-                    <div class="header-actions">
-                        <label class="auto-refresh-toggle">
-                            <input type="checkbox" id="auto-refresh-messages" checked>
-                            <span>Auto-refresh (5s)</span>
-                        </label>
-                        <button class="btn btn-refresh" onclick="app.loadMessages()">🔄 Refresh</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3>All Conversations</h3>
-                        <div class="message-stats">
-                            <span class="stat-badge" id="total-conversations">0 messages</span>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div id="message-history" class="message-history-list">
-                            <p class="text-muted">Loading message history...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Whitelist Page -->
-            <div id="whitelist-page" class="page">
-                <div class="page-header">
-                    <h2>Whitelist Management</h2>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="app.showAddWhitelistForm()">➕ Add Number</button>
-                    </div>
-                </div>
-
-                <div class="card" style="background: #fff3cd; border-color: #ffc107; margin-bottom: 1.5rem;">
-                    <div class="card-body">
-                        <strong>ℹ️ Whitelist Info:</strong> Only numbers on this whitelist will receive automatic AI responses. 
-                        Messages from non-whitelisted numbers will be logged and shown in Message History where you can manually approve them.
-                    </div>
-                </div>
-
-                <!-- Add Number Form -->
-                <div id="add-whitelist-form" class="card" style="display: none;">
-                    <div class="card-header">
-                        <h3>Add Number to Whitelist</h3>
-                        <button class="btn-close" onclick="app.hideAddWhitelistForm()">✕</button>
-                    </div>
-                    <div class="card-body">
-                        <form id="whitelist-form">
-                            <div class="form-group">
-                                <label for="whitelist-phone">Phone Number *</label>
-                                <input type="tel" id="whitelist-phone" class="form-control" placeholder="+1234567890" required>
-                                <small>Include country code (e.g., +628112656869)</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="whitelist-name">Name (Optional)</label>
-                                <input type="text" id="whitelist-name" class="form-control" placeholder="John Doe">
-                            </div>
-                            <div class="form-group">
-                                <label for="whitelist-notes">Notes (Optional)</label>
-                                <textarea id="whitelist-notes" class="form-control" rows="2" placeholder="Add any notes..."></textarea>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">✅ Add to Whitelist</button>
-                                <button type="button" class="btn btn-secondary" onclick="app.hideAddWhitelistForm()">Cancel</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Whitelist Table -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Whitelisted Numbers</h3>
-                        <span class="stat-badge" id="whitelist-count">0 numbers</span>
-                    </div>
-                    <div class="card-body">
-                        <div id="whitelist-list">
-                            <p class="text-muted">Loading whitelist...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pending Messages (Not Whitelisted) -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Pending Approval (Not Whitelisted)</h3>
-                        <span class="stat-badge" id="pending-count">0 pending</span>
-                    </div>
-                    <div class="card-body">
-                        <div id="pending-messages">
-                            <p class="text-muted">Loading pending messages...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+        </div>
     </div>
 
-    <!-- Toast Notifications -->
-    <div id="toast-container"></div>
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ AI Configuration</h2>
+                <button class="close-btn" onclick="app.closeSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <div class="form-group">
+                        <label class="form-label">Your Name</label>
+                        <input type="text" id="config-name" class="form-input" placeholder="David">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Personality</label>
+                        <input type="text" id="config-personality" class="form-input" placeholder="Calm, practical, direct">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Writing Style</label>
+                        <input type="text" id="config-style" class="form-input" placeholder="Short messages, minimal emojis">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Common Phrases</label>
+                        <textarea id="config-phrases" class="form-textarea" placeholder='"Baby", "Okay baby", "Where are you?"'></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">System Prompt (Advanced)</label>
+                        <textarea id="config-prompt" class="form-textarea" rows="6" placeholder="You are ME. Write as I would write..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn-primary">💾 Save Configuration</button>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <script src="/js/app.js"></script>
 </body>

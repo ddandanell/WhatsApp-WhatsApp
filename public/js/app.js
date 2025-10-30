@@ -1,25 +1,23 @@
-class WhatsAppAssistant {
+class WhatsAppAI {
     constructor() {
         this.apiBase = '/api';
-        this.currentPage = 'dashboard';
-        this.credentials = null;
-        this.autoRefreshInterval = null;
-        this.statusCheckInterval = null;
+        this.currentChat = null;
+        this.chats = [];
+        this.refreshInterval = null;
         this.init();
     }
 
     async init() {
-        this.setupEventListeners();
-        this.setupNavigation();
-        
-        // Check if already logged in
+        // Check authentication
         const isAuthenticated = await this.checkAuth();
         if (isAuthenticated) {
             this.showDashboard();
-            this.loadDashboard();
-            this.startStatusMonitoring();
+            this.loadChats();
+            this.startAutoRefresh();
+            this.setupEventListeners();
         } else {
             this.showLogin();
+            this.setupLoginForm();
         }
     }
 
@@ -47,7 +45,19 @@ class WhatsAppAssistant {
         document.getElementById('app-container').style.display = 'flex';
     }
 
-    async login(username, password) {
+    setupLoginForm() {
+        const form = document.getElementById('login-form');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.login();
+        });
+    }
+
+    async login() {
+        const username = document.getElementById('login-username').value;
+        const password = document.getElementById('login-password').value;
+        const errorDiv = document.getElementById('login-error');
+
         try {
             const response = await fetch(`${this.apiBase}/login`, {
                 method: 'POST',
@@ -60,15 +70,16 @@ class WhatsAppAssistant {
 
             if (result.success) {
                 this.showDashboard();
-                this.loadDashboard();
-                this.startStatusMonitoring();
-                return { success: true };
+                this.loadChats();
+                this.startAutoRefresh();
+                this.setupEventListeners();
             } else {
-                return { success: false, error: result.error || 'Login failed' };
+                errorDiv.textContent = result.error || 'Login failed';
+                errorDiv.style.display = 'block';
             }
         } catch (error) {
-            console.error('Login error:', error);
-            return { success: false, error: 'Network error' };
+            errorDiv.textContent = 'Network error';
+            errorDiv.style.display = 'block';
         }
     }
 
@@ -78,1174 +89,432 @@ class WhatsAppAssistant {
                 method: 'POST',
                 credentials: 'include'
             });
-
-            // Clear intervals
-            if (this.statusCheckInterval) clearInterval(this.statusCheckInterval);
-            if (this.autoRefreshInterval) clearInterval(this.autoRefreshInterval);
-
-            // Show login screen
+            if (this.refreshInterval) clearInterval(this.refreshInterval);
             this.showLogin();
-
-            // Clear login form
-            document.getElementById('login-username').value = '';
-            document.getElementById('login-password').value = '';
-            document.getElementById('login-error').style.display = 'none';
         } catch (error) {
             console.error('Logout error:', error);
         }
     }
 
-    getHeaders() {
-        return {
-            'Content-Type': 'application/json'
-        };
+    // ============= Event Listeners =============
+    setupEventListeners() {
+        // Search
+        const searchInput = document.getElementById('search-chats');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filterChats(e.target.value);
+            });
+        }
     }
 
-    // ============= API Calls =============
-    async apiCall(endpoint, method = 'GET', data = null) {
+    // ============= Load Chats =============
+    async loadChats() {
         try {
-            const options = {
-                method,
-                headers: this.getHeaders(),
-                credentials: 'include' // Include cookies for authentication
-            };
+            const response = await fetch(`${this.apiBase}/messages/stats`, {
+                credentials: 'include'
+            });
+            const result = await response.json();
 
-            if (data) {
-                options.body = JSON.stringify(data);
+            if (result.success) {
+                // Get all messages and group by phone number
+                const messagesResponse = await fetch(`${this.apiBase}/messages/recent?limit=100`, {
+                    credentials: 'include'
+                });
+                const messagesResult = await messagesResponse.json();
+
+                if (messagesResult.success) {
+                    this.chats = this.groupMessagesByChat(messagesResult.data);
+                    this.renderChats();
+                    this.updateStats();
+                }
             }
+        } catch (error) {
+            console.error('Load chats error:', error);
+        }
+    }
 
-            const response = await fetch(`${this.apiBase}${endpoint}`, options);
+    groupMessagesByChat(messages) {
+        const chatMap = new Map();
+
+        messages.forEach(msg => {
+            if (!chatMap.has(msg.phone_number)) {
+                chatMap.set(msg.phone_number, {
+                    phone: msg.phone_number,
+                    name: this.formatPhoneName(msg.phone_number),
+                    messages: [],
+                    lastMessage: msg.message_text,
+                    lastTime: msg.created_at,
+                    unread: 0,
+                    autopilot: true // Default to true
+                });
+            }
+            chatMap.get(msg.phone_number).messages.push(msg);
+        });
+
+        // Convert to array and sort by last message time
+        return Array.from(chatMap.values()).sort((a, b) => {
+            return new Date(b.lastTime) - new Date(a.lastTime);
+        });
+    }
+
+    formatPhoneName(phone) {
+        // Remove country code and format nicely
+        const cleaned = phone.replace(/[^\d]/g, '');
+        if (cleaned.length > 10) {
+            return '+' + cleaned.slice(0, -10) + ' ' + cleaned.slice(-10);
+        }
+        return phone;
+    }
+
+    renderChats() {
+        const chatList = document.getElementById('chat-list');
+        
+        if (this.chats.length === 0) {
+            chatList.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: #8696a0;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">💬</div>
+                    <p>No conversations yet</p>
+                    <p style="font-size: 0.85rem; margin-top: 5px;">Messages will appear here when someone contacts you</p>
+                </div>
+            `;
+            return;
+        }
+
+        chatList.innerHTML = this.chats.map(chat => `
+            <div class="chat-item ${this.currentChat && this.currentChat.phone === chat.phone ? 'active' : ''}" 
+                 onclick="app.selectChat('${chat.phone}')">
+                <div class="chat-avatar">${this.getInitial(chat.name)}</div>
+                <div class="chat-info">
+                    <div class="chat-name">${chat.name}</div>
+                    <div class="chat-preview">${this.truncate(chat.lastMessage, 40)}</div>
+                </div>
+                <div class="chat-meta">
+                    <div class="chat-time">${this.formatTime(chat.lastTime)}</div>
+                    <div class="autopilot-badge ${chat.autopilot ? '' : 'off'}">
+                        ${chat.autopilot ? '🤖 ON' : 'OFF'}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    getInitial(name) {
+        return name.charAt(name.indexOf(' ') > 0 ? name.indexOf(' ') + 1 : 0).toUpperCase();
+    }
+
+    truncate(text, length) {
+        return text.length > length ? text.substring(0, length) + '...' : text;
+    }
+
+    formatTime(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 24 * 60 * 60 * 1000) {
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        } else if (diff < 7 * 24 * 60 * 60 * 1000) {
+            return date.toLocaleDateString('en-US', { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+    }
+
+    filterChats(query) {
+        const filtered = query ? this.chats.filter(chat => 
+            chat.name.toLowerCase().includes(query.toLowerCase()) ||
+            chat.phone.includes(query)
+        ) : this.chats;
+
+        const chatList = document.getElementById('chat-list');
+        chatList.innerHTML = filtered.map(chat => `
+            <div class="chat-item ${this.currentChat && this.currentChat.phone === chat.phone ? 'active' : ''}" 
+                 onclick="app.selectChat('${chat.phone}')">
+                <div class="chat-avatar">${this.getInitial(chat.name)}</div>
+                <div class="chat-info">
+                    <div class="chat-name">${chat.name}</div>
+                    <div class="chat-preview">${this.truncate(chat.lastMessage, 40)}</div>
+                </div>
+                <div class="chat-meta">
+                    <div class="chat-time">${this.formatTime(chat.lastTime)}</div>
+                    <div class="autopilot-badge ${chat.autopilot ? '' : 'off'}">
+                        ${chat.autopilot ? '🤖 ON' : 'OFF'}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // ============= Chat Selection =============
+    async selectChat(phone) {
+        const chat = this.chats.find(c => c.phone === phone);
+        if (!chat) return;
+
+        this.currentChat = chat;
+        this.renderChats(); // Re-render to show active state
+        this.renderChatArea(chat);
+    }
+
+    renderChatArea(chat) {
+        const chatArea = document.getElementById('chat-area');
+        
+        chatArea.innerHTML = `
+            <div class="chat-header">
+                <div class="chat-header-info">
+                    <div class="chat-avatar">${this.getInitial(chat.name)}</div>
+                    <div>
+                        <div class="chat-header-name">${chat.name}</div>
+                        <div class="chat-header-status">${chat.phone}</div>
+                    </div>
+                </div>
+                <div class="autopilot-toggle">
+                    <span class="toggle-label">Autopilot</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" ${chat.autopilot ? 'checked' : ''} 
+                               onchange="app.toggleAutopilot('${chat.phone}', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                ${this.renderMessages(chat.messages)}
+            </div>
+            
+            <div class="message-input-container">
+                <input type="text" class="message-input" id="message-input" 
+                       placeholder="Type a message" 
+                       onkeypress="if(event.key==='Enter') app.sendMessage()">
+                <button class="send-btn" onclick="app.sendMessage()">
+                    ➤
+                </button>
+            </div>
+        `;
+
+        // Scroll to bottom
+        setTimeout(() => {
+            const container = document.getElementById('messages-container');
+            if (container) container.scrollTop = container.scrollHeight;
+        }, 100);
+    }
+
+    renderMessages(messages) {
+        if (!messages || messages.length === 0) {
+            return `
+                <div style="text-align: center; color: #8696a0; padding: 40px;">
+                    No messages yet
+                </div>
+            `;
+        }
+
+        return messages.map(msg => `
+            <div class="message ${msg.direction === 'outgoing' ? 'sent' : 'received'}">
+                <div class="message-bubble">
+                    <div class="message-text">${this.escapeHtml(msg.message_text)}</div>
+                    <div class="message-time">${this.formatMessageTime(msg.created_at)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    formatMessageTime(timestamp) {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ============= Send Message =============
+    async sendMessage() {
+        if (!this.currentChat) return;
+
+        const input = document.getElementById('message-input');
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        try {
+            const response = await fetch(`${this.apiBase}/send-message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    phoneNumber: this.currentChat.phone,
+                    message: message
+                })
+            });
 
             const result = await response.json();
-            return result;
-        } catch (error) {
-            console.error('API Error:', error);
-            this.showToast('API request failed: ' + error.message, 'error');
-            return null;
-        }
-    }
 
-    // ============= Navigation =============
-    setupNavigation() {
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const page = item.dataset.page;
-                this.navigateTo(page);
-            });
-        });
-    }
+            if (result.success) {
+                // Add message to chat
+                this.currentChat.messages.push({
+                    phone_number: this.currentChat.phone,
+                    message_text: message,
+                    direction: 'outgoing',
+                    created_at: new Date().toISOString()
+                });
 
-    navigateTo(page) {
-        // Update active nav item
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-            if (item.dataset.page === page) {
-                item.classList.add('active');
+                // Update last message
+                this.currentChat.lastMessage = message;
+                this.currentChat.lastTime = new Date().toISOString();
+
+                // Clear input
+                input.value = '';
+
+                // Re-render
+                this.renderChatArea(this.currentChat);
+                this.renderChats();
             }
-        });
-
-        // Update active page
-        document.querySelectorAll('.page').forEach(p => {
-            p.classList.remove('active');
-        });
-        document.getElementById(`${page}-page`).classList.add('active');
-
-        this.currentPage = page;
-
-        // Load page data
-        switch (page) {
-            case 'dashboard':
-                this.loadDashboard();
-                break;
-            case 'knowledge':
-                this.loadKnowledge();
-                break;
-            case 'settings':
-                this.loadSettings();
-                break;
-            case 'messages':
-                this.loadMessages();
-                break;
-            case 'whitelist':
-                this.loadWhitelist();
-                break;
+        } catch (error) {
+            console.error('Send message error:', error);
+            alert('Failed to send message');
         }
     }
 
-    // ============= Dashboard =============
-    async loadDashboard() {
+    // ============= Autopilot Toggle =============
+    async toggleAutopilot(phone, enabled) {
+        const chat = this.chats.find(c => c.phone === phone);
+        if (!chat) return;
+
+        chat.autopilot = enabled;
+
+        // Update whitelist status
         try {
-            // Load stats
-            const statsResponse = await this.apiCall('/stats');
-            if (statsResponse?.success) {
-                const stats = statsResponse.data;
-                document.getElementById('stat-total').textContent = stats.total;
-                document.getElementById('stat-replied').textContent = stats.replied;
-                document.getElementById('stat-avg-time').textContent = `${stats.avgResponseTime}s`;
+            if (enabled) {
+                // Add to whitelist
+                await fetch(`${this.apiBase}/whitelist`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        phone_number: phone,
+                        name: chat.name,
+                        notes: 'Auto-added via dashboard'
+                    })
+                });
+            } else {
+                // Remove from whitelist
+                await fetch(`${this.apiBase}/whitelist/${encodeURIComponent(phone)}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
             }
 
-            // Load knowledge count
-            const knowledgeResponse = await this.apiCall('/knowledge');
-            if (knowledgeResponse?.success) {
-                document.getElementById('stat-knowledge').textContent = knowledgeResponse.data.length;
-            }
+            this.renderChats();
+            this.updateStats();
 
-            // Load settings for master toggle
-            const settingsResponse = await this.apiCall('/settings');
-            if (settingsResponse?.success) {
-                const autoReply = settingsResponse.data.auto_reply_enabled === 'true';
-                document.getElementById('master-toggle').checked = autoReply;
-                document.getElementById('status-label').textContent = autoReply ? 'Enabled' : 'Disabled';
-            }
-
-            // Load recent messages
-            const messagesResponse = await this.apiCall('/messages?limit=5');
-            if (messagesResponse?.success) {
-                this.displayRecentMessages(messagesResponse.data);
-            }
+            // Show notification
+            console.log(`Autopilot ${enabled ? 'enabled' : 'disabled'} for ${chat.name}`);
         } catch (error) {
-            console.error('Error loading dashboard:', error);
+            console.error('Toggle autopilot error:', error);
         }
     }
 
-    displayRecentMessages(messages) {
-        const container = document.getElementById('recent-messages');
+    // ============= Stats =============
+    updateStats() {
+        document.getElementById('stat-chats').textContent = this.chats.length;
         
-        if (messages.length === 0) {
-            container.innerHTML = '<p class="text-muted">No messages yet</p>';
-            return;
-        }
-
-        container.innerHTML = messages.map(msg => `
-            <div class="message-item">
-                <div class="message-header">
-                    <span class="message-from">${msg.from_number}</span>
-                    <span class="message-time">${this.formatDate(msg.timestamp)}</span>
-                </div>
-                <div class="message-text">${this.escapeHtml(msg.message_text)}</div>
-                ${msg.response_text ? `
-                    <div class="message-response">
-                        <strong>Response:</strong> ${this.escapeHtml(msg.response_text)}
-                    </div>
-                ` : ''}
-                <span class="message-status status-${msg.status}">${msg.status}</span>
-            </div>
-        `).join('');
-    }
-
-    // ============= Knowledge Base =============
-    async loadKnowledge() {
-        const response = await this.apiCall('/knowledge');
-        if (response?.success) {
-            this.displayKnowledge(response.data);
-        }
-    }
-
-    displayKnowledge(entries) {
-        const container = document.getElementById('knowledge-list');
+        const today = new Date().toDateString();
+        const todayMessages = this.chats.reduce((sum, chat) => {
+            return sum + chat.messages.filter(m => 
+                new Date(m.created_at).toDateString() === today
+            ).length;
+        }, 0);
+        document.getElementById('stat-messages').textContent = todayMessages;
         
-        if (entries.length === 0) {
-            container.innerHTML = '<p class="text-muted text-center">No knowledge entries yet. Add your first one!</p>';
-            return;
-        }
-
-        container.innerHTML = entries.map(entry => `
-            <div class="knowledge-item">
-                <div class="knowledge-header">
-                    <div>
-                        <div class="knowledge-title">${this.escapeHtml(entry.title)}</div>
-                        <div class="knowledge-meta">
-                            <span class="knowledge-badge">📁 ${this.escapeHtml(entry.category)}</span>
-                            ${entry.tags ? `<span class="knowledge-badge">🏷️ ${this.escapeHtml(entry.tags)}</span>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="knowledge-content">${this.escapeHtml(entry.content).substring(0, 200)}${entry.content.length > 200 ? '...' : ''}</div>
-                <div class="knowledge-actions">
-                    <button class="btn btn-sm btn-secondary" onclick="app.editKnowledge(${entry.id})">✏️ Edit</button>
-                    <button class="btn btn-sm btn-danger" onclick="app.deleteKnowledge(${entry.id})">🗑️ Delete</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    showKnowledgeForm(edit = false) {
-        document.getElementById('knowledge-form').style.display = 'block';
-        document.getElementById('form-title').textContent = edit ? 'Edit Knowledge' : 'Add New Knowledge';
-        
-        if (!edit) {
-            document.getElementById('knowledge-edit-form').reset();
-            document.getElementById('edit-id').value = '';
-        }
-    }
-
-    hideKnowledgeForm() {
-        document.getElementById('knowledge-form').style.display = 'none';
-        document.getElementById('knowledge-edit-form').reset();
-    }
-
-    async editKnowledge(id) {
-        const response = await this.apiCall(`/knowledge/${id}`);
-        if (response?.success) {
-            const entry = response.data;
-            document.getElementById('edit-id').value = entry.id;
-            document.getElementById('knowledge-title').value = entry.title;
-            document.getElementById('knowledge-content').value = entry.content;
-            document.getElementById('knowledge-category').value = entry.category;
-            document.getElementById('knowledge-tags').value = entry.tags;
-            this.showKnowledgeForm(true);
-        }
-    }
-
-    async deleteKnowledge(id) {
-        if (!confirm('Are you sure you want to delete this knowledge entry?')) {
-            return;
-        }
-
-        const response = await this.apiCall(`/knowledge/${id}`, 'DELETE');
-        if (response?.success) {
-            this.showToast('Knowledge entry deleted successfully', 'success');
-            this.loadKnowledge();
-        }
+        const autopilotCount = this.chats.filter(c => c.autopilot).length;
+        document.getElementById('stat-autopilot').textContent = autopilotCount;
     }
 
     // ============= Settings =============
+    openSettings() {
+        document.getElementById('settings-modal').classList.add('active');
+        this.loadSettings();
+    }
+
+    closeSettings() {
+        document.getElementById('settings-modal').classList.remove('active');
+    }
+
     async loadSettings() {
-        const response = await this.apiCall('/settings');
-        if (response?.success) {
-            const settings = response.data;
-            
-            document.getElementById('setting-auto-reply').checked = settings.auto_reply_enabled === 'true';
-            document.getElementById('setting-delay').value = settings.response_delay || 4;
-            document.getElementById('setting-hours-start').value = settings.active_hours_start || '00:00';
-            document.getElementById('setting-hours-end').value = settings.active_hours_end || '23:59';
-            document.getElementById('setting-temperature').value = settings.ai_temperature || 0.8;
-            document.getElementById('temp-value').textContent = settings.ai_temperature || 0.8;
-            document.getElementById('setting-system-prompt').value = settings.system_prompt || '';
-            
-            // Personalization settings
-            if (document.getElementById('setting-my-name')) {
-                document.getElementById('setting-my-name').value = settings.my_name || '';
+        try {
+            const response = await fetch(`${this.apiBase}/settings`, {
+                credentials: 'include'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                document.getElementById('config-name').value = result.data.my_name || '';
+                document.getElementById('config-personality').value = result.data.my_personality || '';
+                document.getElementById('config-style').value = result.data.my_writing_style || '';
+                document.getElementById('config-phrases').value = result.data.my_common_phrases || '';
+                document.getElementById('config-prompt').value = result.data.system_prompt || '';
             }
-            if (document.getElementById('setting-my-personality')) {
-                document.getElementById('setting-my-personality').value = settings.my_personality || '';
-            }
-            if (document.getElementById('setting-my-style')) {
-                document.getElementById('setting-my-style').value = settings.my_writing_style || '';
-            }
-            if (document.getElementById('setting-my-phrases')) {
-                document.getElementById('setting-my-phrases').value = settings.my_common_phrases || '';
-            }
+        } catch (error) {
+            console.error('Load settings error:', error);
         }
+
+        // Setup form submit
+        const form = document.getElementById('settings-form');
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await this.saveSettings();
+        };
     }
 
     async saveSettings() {
         const settings = {
-            auto_reply_enabled: document.getElementById('setting-auto-reply').checked ? 'true' : 'false',
-            response_delay: document.getElementById('setting-delay').value,
-            active_hours_start: document.getElementById('setting-hours-start').value,
-            active_hours_end: document.getElementById('setting-hours-end').value,
-            ai_temperature: document.getElementById('setting-temperature').value,
-            system_prompt: document.getElementById('setting-system-prompt').value
+            my_name: document.getElementById('config-name').value,
+            my_personality: document.getElementById('config-personality').value,
+            my_writing_style: document.getElementById('config-style').value,
+            my_common_phrases: document.getElementById('config-phrases').value,
+            system_prompt: document.getElementById('config-prompt').value
         };
 
-        // Add personalization settings if fields exist
-        if (document.getElementById('setting-my-name')) {
-            settings.my_name = document.getElementById('setting-my-name').value;
-        }
-        if (document.getElementById('setting-my-personality')) {
-            settings.my_personality = document.getElementById('setting-my-personality').value;
-        }
-        if (document.getElementById('setting-my-style')) {
-            settings.my_writing_style = document.getElementById('setting-my-style').value;
-        }
-        if (document.getElementById('setting-my-phrases')) {
-            settings.my_common_phrases = document.getElementById('setting-my-phrases').value;
-        }
-
-        const response = await this.apiCall('/settings', 'POST', settings);
-        if (response?.success) {
-            this.showToast('✅ Settings saved! Your AI will now write exactly like you.', 'success');
-        }
-    }
-
-    // ============= Messages =============
-    async loadMessages() {
-        const response = await this.apiCall('/messages?limit=50');
-        if (response?.success) {
-            this.displayMessages(response.data);
-        }
-    }
-
-    displayMessages(messages) {
-        const container = document.getElementById('message-history');
-        
-        if (messages.length === 0) {
-            container.innerHTML = '<p class="text-muted text-center">No messages yet</p>';
-            return;
-        }
-
-        container.innerHTML = messages.map(msg => `
-            <div class="message-item">
-                <div class="message-header">
-                    <span class="message-from">📱 ${msg.from_number}</span>
-                    <span class="message-time">${this.formatDate(msg.timestamp)}</span>
-                </div>
-                <div class="message-text">
-                    <strong>Message:</strong> ${this.escapeHtml(msg.message_text)}
-                </div>
-                ${msg.response_text ? `
-                    <div class="message-response">
-                        <strong>🤖 Response:</strong> ${this.escapeHtml(msg.response_text)}
-                        <br><small>Response time: ${msg.response_time}s | Knowledge used: ${msg.knowledge_used}</small>
-                    </div>
-                ` : ''}
-                <span class="message-status status-${msg.status}">${msg.status}</span>
-            </div>
-        `).join('');
-    }
-
-    // ============= Event Listeners =============
-    setupEventListeners() {
-        // Master toggle
-        document.getElementById('master-toggle').addEventListener('change', async (e) => {
-            const enabled = e.target.checked;
-            await this.apiCall('/settings', 'POST', { auto_reply_enabled: enabled ? 'true' : 'false' });
-            document.getElementById('status-label').textContent = enabled ? 'Enabled' : 'Disabled';
-            this.showToast(`Auto-reply ${enabled ? 'enabled' : 'disabled'}`, 'success');
-        });
-
-        // Knowledge form submission
-        document.getElementById('knowledge-edit-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const id = document.getElementById('edit-id').value;
-            const data = {
-                title: document.getElementById('knowledge-title').value,
-                content: document.getElementById('knowledge-content').value,
-                category: document.getElementById('knowledge-category').value,
-                tags: document.getElementById('knowledge-tags').value
-            };
-
-            const endpoint = id ? `/knowledge/${id}` : '/knowledge';
-            const method = id ? 'PUT' : 'POST';
-
-            const response = await this.apiCall(endpoint, method, data);
-            if (response?.success) {
-                this.showToast(`Knowledge ${id ? 'updated' : 'created'} successfully`, 'success');
-                this.hideKnowledgeForm();
-                this.loadKnowledge();
-            }
-        });
-
-        // Knowledge search
-        let searchTimeout;
-        document.getElementById('knowledge-search').addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                const query = e.target.value;
-                if (query) {
-                    this.searchKnowledge(query);
-                } else {
-                    this.loadKnowledge();
-                }
-            }, 300);
-        });
-
-        // Temperature slider
-        document.getElementById('setting-temperature').addEventListener('input', (e) => {
-            document.getElementById('temp-value').textContent = e.target.value;
-        });
-    }
-
-    async searchKnowledge(query) {
-        const response = await this.apiCall(`/knowledge/search?q=${encodeURIComponent(query)}`);
-        if (response?.success) {
-            this.displayKnowledge(response.data);
-        }
-    }
-
-    // ============= Utilities =============
-    showToast(message, type = 'success') {
-        const container = document.getElementById('toast-container');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        
-        container.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
-    }
-
-    formatDate(dateString) {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = now - date;
-        
-        if (diff < 60000) return 'Just now';
-        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-        
-        return date.toLocaleString();
-    }
-
-    escapeHtml(text) {
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
-    }
-
-    // ============= API Status Monitoring =============
-    async startStatusMonitoring() {
-        // Initial check
-        await this.checkAllAPIStatus();
-        
-        // Check every 10 seconds
-        this.statusCheckInterval = setInterval(() => {
-            this.checkAllAPIStatus();
-        }, 10000);
-    }
-
-    async checkAllAPIStatus() {
-        // Check Server
         try {
-            const healthResponse = await fetch('/webhook/health');
-            if (healthResponse.ok) {
-                this.updateStatus('server', 'online', '🟢', 'Online');
+            const response = await fetch(`${this.apiBase}/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(settings)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('✅ Settings saved successfully!');
+                this.closeSettings();
             } else {
-                this.updateStatus('server', 'offline', '🔴', 'Offline');
+                alert('❌ Failed to save settings');
             }
         } catch (error) {
-            this.updateStatus('server', 'offline', '🔴', 'Offline');
-        }
-
-        // Check Database (via settings API)
-        try {
-            const dbResponse = await this.apiCall('/settings');
-            if (dbResponse && dbResponse.success) {
-                this.updateStatus('database', 'online', '🟢', 'Connected');
-            } else {
-                this.updateStatus('database', 'warning', '🟡', 'Issues');
-            }
-        } catch (error) {
-            this.updateStatus('database', 'offline', '🔴', 'Disconnected');
-        }
-
-        // Check WhatsApp API (simulated - based on last message sent)
-        const messages = await this.apiCall('/messages?limit=1');
-        if (messages && messages.success && messages.data.length > 0) {
-            const lastMessage = messages.data[0];
-            if (lastMessage.response_text) {
-                this.updateStatus('whatsapp', 'online', '🟢', 'Connected');
-            } else {
-                this.updateStatus('whatsapp', 'warning', '🟡', 'No recent activity');
-            }
-        } else {
-            this.updateStatus('whatsapp', 'warning', '🟡', 'Not tested yet');
-        }
-
-        // Check Grok AI (simulated - based on successful responses)
-        if (messages && messages.success && messages.data.length > 0) {
-            const lastMessage = messages.data[0];
-            if (lastMessage.response_text && lastMessage.status === 'replied') {
-                this.updateStatus('grok', 'online', '🟢', 'Responding');
-            } else {
-                this.updateStatus('grok', 'warning', '🟡', 'Waiting');
-            }
-        } else {
-            this.updateStatus('grok', 'warning', '🟡', 'Not tested yet');
+            console.error('Save settings error:', error);
+            alert('❌ Network error');
         }
     }
 
-    updateStatus(component, status, icon, text) {
-        const iconElement = document.getElementById(`${component}-status`);
-        const textElement = document.getElementById(`${component}-status-text`);
-        
-        if (iconElement) {
-            iconElement.textContent = icon;
-            iconElement.className = `status-icon ${status}`;
-        }
-        
-        if (textElement) {
-            textElement.textContent = text;
-            textElement.className = `status-text ${status}`;
-        }
-    }
-
-    // ============= Enhanced Message Display =============
-    displayMessagesEnhanced(messages) {
-        const container = document.getElementById('message-history');
-        document.getElementById('total-conversations').textContent = `${messages.length} messages`;
-        
-        if (messages.length === 0) {
-            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">No messages yet. Send a test message to get started!</div>';
-            return;
-        }
-
-        // Group messages by phone number
-        const conversations = {};
-        messages.forEach(msg => {
-            if (!conversations[msg.from_number]) {
-                conversations[msg.from_number] = [];
-            }
-            conversations[msg.from_number].push(msg);
-        });
-
-        container.innerHTML = Object.entries(conversations).map(([phone, msgs]) => {
-            return `
-                <div class="message-conversation">
-                    <div class="message-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span class="message-from" style="font-weight: 600;">📱 ${phone}</span>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${msgs.length} messages</span>
-                        </div>
-                    </div>
-                    <div class="message-thread">
-                        ${msgs.map(msg => this.renderMessageBubble(msg)).join('')}
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    renderMessageBubble(msg) {
-        const time = this.formatDate(msg.timestamp);
-        const hasResponse = msg.response_text && msg.response_text.trim();
-        
-        return `
-            ${hasResponse ? `
-                <div class="message-bubble incoming">
-                    <div class="message-content">${this.escapeHtml(msg.message_text)}</div>
-                    <div class="message-meta">
-                        <span class="message-time-full">${time}</span>
-                        <span class="message-status-icon">📩 Received</span>
-                    </div>
-                </div>
-                <div class="message-bubble outgoing">
-                    <div class="message-content">${this.escapeHtml(msg.response_text)}</div>
-                    <div class="message-meta">
-                        <span class="message-time-full">
-                            ${msg.response_time ? `${msg.response_time}s` : ''}
-                        </span>
-                        <span class="message-status-icon delivery-check">
-                            ${msg.status === 'replied' ? '✓✓' : '✓'} Sent
-                        </span>
-                    </div>
-                </div>
-            ` : `
-                <div class="message-bubble incoming">
-                    <div class="message-content">${this.escapeHtml(msg.message_text)}</div>
-                    <div class="message-meta">
-                        <span class="message-time-full">${time}</span>
-                        <span class="message-status-icon delivery-pending">⏳ Pending</span>
-                    </div>
-                </div>
-            `}
-        `;
-    }
-
-    // ============= Auto-refresh Messages =============
+    // ============= Auto Refresh =============
     startAutoRefresh() {
-        const checkbox = document.getElementById('auto-refresh-messages');
-        if (!checkbox) return;
-        
-        if (checkbox.checked && this.currentPage === 'messages') {
-            this.autoRefreshInterval = setInterval(() => {
-                if (this.currentPage === 'messages') {
-                    this.loadMessages(true); // silent refresh
-                }
-            }, 5000);
-        } else {
-            if (this.autoRefreshInterval) {
-                clearInterval(this.autoRefreshInterval);
-                this.autoRefreshInterval = null;
+        // Refresh chats every 5 seconds
+        this.refreshInterval = setInterval(() => {
+            this.loadChats();
+            
+            // If a chat is selected, refresh it
+            if (this.currentChat) {
+                this.selectChat(this.currentChat.phone);
             }
-        }
-    }
-
-    async loadMessages(silent = false) {
-        if (!silent) {
-            const container = document.getElementById('message-history');
-            if (container) {
-                container.innerHTML = '<div class="text-center" style="padding: 2rem;"><div class="loading-spinner"></div></div>';
-            }
-        }
-
-        const response = await this.apiCall('/messages?limit=100');
-        if (response?.success) {
-            this.displayMessagesEnhanced(response.data);
-        }
-    }
-
-    // ============= Whitelist Management =============
-    async loadWhitelist() {
-        const response = await this.apiCall('/whitelist');
-        if (response?.success) {
-            this.displayWhitelist(response.data);
-        }
-        
-        // Also load pending messages
-        await this.loadPendingMessages();
-    }
-
-    displayWhitelist(whitelist) {
-        const container = document.getElementById('whitelist-list');
-        document.getElementById('whitelist-count').textContent = `${whitelist.length} numbers`;
-        
-        if (whitelist.length === 0) {
-            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">No numbers whitelisted yet. Add a number to start auto-replying.</div>';
-            return;
-        }
-
-        container.innerHTML = `
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="border-bottom: 2px solid var(--border-color);">
-                        <th style="padding: 0.75rem; text-align: left;">Phone Number</th>
-                        <th style="padding: 0.75rem; text-align: left;">Name</th>
-                        <th style="padding: 0.75rem; text-align: left;">Notes</th>
-                        <th style="padding: 0.75rem; text-align: left;">Added</th>
-                        <th style="padding: 0.75rem; text-align: right;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${whitelist.map(entry => `
-                        <tr style="border-bottom: 1px solid var(--border-color);">
-                            <td style="padding: 0.75rem; font-weight: 600;">📱 ${this.escapeHtml(entry.phone_number)}</td>
-                            <td style="padding: 0.75rem;">${this.escapeHtml(entry.name || '-')}</td>
-                            <td style="padding: 0.75rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(entry.notes || '-')}</td>
-                            <td style="padding: 0.75rem; font-size: 0.875rem; color: var(--text-secondary);">${this.formatDate(entry.added_at)}</td>
-                            <td style="padding: 0.75rem; text-align: right;">
-                                <button class="btn btn-sm btn-danger" onclick="app.removeFromWhitelist('${entry.phone_number}')">🗑️ Remove</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-    }
-
-    async loadPendingMessages() {
-        const messagesResponse = await this.apiCall('/messages?limit=100');
-        const whitelistResponse = await this.apiCall('/whitelist');
-        
-        if (messagesResponse?.success && whitelistResponse?.success) {
-            const allMessages = messagesResponse.data;
-            const whitelistedNumbers = new Set(whitelistResponse.data.map(w => w.phone_number));
-            
-            // Find messages from non-whitelisted numbers
-            const pending = allMessages.filter(msg => !whitelistedNumbers.has(msg.from_number) && !msg.response_text);
-            
-            // Group by phone number
-            const pendingByNumber = {};
-            pending.forEach(msg => {
-                if (!pendingByNumber[msg.from_number]) {
-                    pendingByNumber[msg.from_number] = [];
-                }
-                pendingByNumber[msg.from_number].push(msg);
-            });
-            
-            this.displayPendingMessages(pendingByNumber);
-        }
-    }
-
-    displayPendingMessages(pendingByNumber) {
-        const container = document.getElementById('pending-messages');
-        const totalPending = Object.keys(pendingByNumber).length;
-        document.getElementById('pending-count').textContent = `${totalPending} pending`;
-        
-        if (totalPending === 0) {
-            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">No pending messages. All incoming numbers are whitelisted!</div>';
-            return;
-        }
-
-        container.innerHTML = Object.entries(pendingByNumber).map(([phone, msgs]) => `
-            <div class="message-conversation" style="background: #fff3cd;">
-                <div class="message-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #ffc107;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="message-from" style="font-weight: 600;">🚫 ${phone} (Not Whitelisted)</span>
-                        <button class="btn btn-sm btn-primary" onclick="app.approveAndWhitelist('${phone}')">✅ Approve & Add to Whitelist</button>
-                    </div>
-                </div>
-                <div style="margin-top: 1rem;">
-                    ${msgs.map(msg => `
-                        <div style="padding: 0.75rem; background: white; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid #ffc107;">
-                            <div style="margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem;">${this.formatDate(msg.timestamp)}</div>
-                            <div>${this.escapeHtml(msg.message_text)}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `).join('');
-    }
-
-    showAddWhitelistForm() {
-        document.getElementById('add-whitelist-form').style.display = 'block';
-        document.getElementById('whitelist-form').reset();
-    }
-
-    hideAddWhitelistForm() {
-        document.getElementById('add-whitelist-form').style.display = 'none';
-    }
-
-    async approveAndWhitelist(phoneNumber) {
-        const name = prompt(`Add name for ${phoneNumber} (optional):`);
-        const notes = prompt('Add notes (optional):');
-        
-        const response = await this.apiCall('/whitelist', 'POST', {
-            phone_number: phoneNumber,
-            name: name || '',
-            notes: notes || ''
-        });
-        
-        if (response?.success) {
-            this.showToast(`✅ ${phoneNumber} added to whitelist!`, 'success');
-            this.loadWhitelist();
-        }
-    }
-
-    async removeFromWhitelist(phoneNumber) {
-        if (!confirm(`Remove ${phoneNumber} from whitelist?\n\nThey will no longer receive automatic responses.`)) {
-            return;
-        }
-        
-        const response = await this.apiCall(`/whitelist/${encodeURIComponent(phoneNumber)}`, 'DELETE');
-        
-        if (response?.success) {
-            this.showToast(`${phoneNumber} removed from whitelist`, 'success');
-            this.loadWhitelist();
-        }
-    }
-
-    // ============= Inbox Management =============
-    async loadInbox() {
-        const response = await this.apiCall('/messages?limit=500');
-        if (response?.success) {
-            this.displayInbox(response.data);
-        }
-    }
-
-    displayInbox(messages) {
-        // Group messages by phone number
-        const conversations = {};
-        
-        messages.forEach(msg => {
-            if (!conversations[msg.from_number]) {
-                conversations[msg.from_number] = {
-                    phone: msg.from_number,
-                    messages: [],
-                    lastMessage: null,
-                    lastTimestamp: null,
-                    unreadCount: 0
-                };
-            }
-            
-            conversations[msg.from_number].messages.push(msg);
-            
-            // Track last message and timestamp
-            const msgTime = new Date(msg.timestamp);
-            if (!conversations[msg.from_number].lastTimestamp || msgTime > conversations[msg.from_number].lastTimestamp) {
-                conversations[msg.from_number].lastTimestamp = msgTime;
-                conversations[msg.from_number].lastMessage = msg;
-            }
-        });
-        
-        // Sort by most recent
-        const sortedConversations = Object.values(conversations).sort((a, b) => {
-            return b.lastTimestamp - a.lastTimestamp;
-        });
-        
-        this.displayConversationList(sortedConversations);
-    }
-
-    displayConversationList(conversations) {
-        const container = document.getElementById('conversation-list-items');
-        const countElement = document.getElementById('inbox-conversation-count');
-        
-        countElement.textContent = `${conversations.length} chats`;
-        
-        if (conversations.length === 0) {
-            container.innerHTML = '<div class="text-muted" style="padding: 2rem; text-align: center;">No conversations yet</div>';
-            return;
-        }
-        
-        container.innerHTML = conversations.map(conv => {
-            const lastMsg = conv.lastMessage;
-            const preview = lastMsg.response_text ? 
-                `You: ${lastMsg.response_text.substring(0, 40)}...` : 
-                lastMsg.message_text.substring(0, 40) + '...';
-            
-            return `
-                <div class="conversation-item" data-phone="${this.escapeHtml(conv.phone)}" onclick="app.openChat('${this.escapeHtml(conv.phone)}')">
-                    <div class="conversation-header">
-                        <div class="conversation-contact">📱 ${this.escapeHtml(conv.phone)}</div>
-                        <div class="conversation-time">${this.formatDate(lastMsg.timestamp)}</div>
-                    </div>
-                    <div class="conversation-preview">${this.escapeHtml(preview)}</div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    async openChat(phoneNumber) {
-        // Highlight selected conversation
-        document.querySelectorAll('.conversation-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        const selectedItem = document.querySelector(`[data-phone="${phoneNumber}"]`);
-        if (selectedItem) {
-            selectedItem.classList.add('active');
-        }
-        
-        // Show chat view
-        document.getElementById('chat-empty-state').style.display = 'none';
-        document.getElementById('chat-active').style.display = 'flex';
-        
-        // Update header
-        document.getElementById('active-chat-name').textContent = phoneNumber;
-        document.getElementById('active-chat-number').textContent = phoneNumber;
-        
-        // Load messages for this number
-        const response = await this.apiCall(`/messages/${encodeURIComponent(phoneNumber)}?limit=100`);
-        if (response?.success) {
-            this.displayChatMessages(response.data);
-        }
-    }
-
-    displayChatMessages(messages) {
-        const container = document.getElementById('chat-messages-container');
-        
-        if (messages.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No messages yet</div>';
-            return;
-        }
-        
-        // Sort messages by timestamp (oldest first)
-        const sortedMessages = [...messages].sort((a, b) => {
-            return new Date(a.timestamp) - new Date(b.timestamp);
-        });
-        
-        container.innerHTML = '';
-        
-        sortedMessages.forEach(msg => {
-            // Incoming message
-            container.innerHTML += `
-                <div class="chat-message incoming">
-                    <div class="message-bubble">
-                        <div class="message-content">${this.escapeHtml(msg.message_text)}</div>
-                        <div class="message-meta">
-                            <span class="message-time">${this.formatTime(msg.timestamp)}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // Outgoing message (if replied)
-            if (msg.response_text && msg.response_text.trim()) {
-                const deliveryStatus = msg.status === 'replied' ? 'delivered' : 'sent';
-                const checkmarks = msg.status === 'replied' ? '✓✓' : '✓';
-                
-                container.innerHTML += `
-                    <div class="chat-message outgoing">
-                        <div class="message-bubble">
-                            <div class="message-content">${this.escapeHtml(msg.response_text)}</div>
-                            <div class="message-meta">
-                                <span class="message-time">${this.formatTime(msg.timestamp)}</span>
-                                <span class="message-status ${deliveryStatus}">${checkmarks}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        });
-        
-        // Scroll to bottom
-        setTimeout(() => {
-            container.scrollTop = container.scrollHeight;
-        }, 100);
-    }
-
-    closeChat() {
-        document.getElementById('chat-empty-state').style.display = 'flex';
-        document.getElementById('chat-active').style.display = 'none';
-        document.querySelectorAll('.conversation-item').forEach(item => {
-            item.classList.remove('active');
-        });
-    }
-
-    formatTime(dateString) {
-        const date = new Date(dateString);
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    }
-
-    // Auto-refresh inbox
-    startInboxAutoRefresh() {
-        const checkbox = document.getElementById('auto-refresh-inbox');
-        if (!checkbox) return;
-        
-        if (checkbox.checked && this.currentPage === 'inbox') {
-            this.autoRefreshInterval = setInterval(() => {
-                if (this.currentPage === 'inbox') {
-                    this.loadInbox();
-                }
-            }, 3000); // 3 seconds
-        } else {
-            if (this.autoRefreshInterval) {
-                clearInterval(this.autoRefreshInterval);
-                this.autoRefreshInterval = null;
-            }
-        }
-    }
-
-    // ============= Send Messages =============
-    loadSendPage() {
-        // Setup form listeners if not already set
-        this.setupSendMessageForms();
-    }
-
-    setupSendMessageForms() {
-        // Send single message form
-        const sendForm = document.getElementById('send-message-form');
-        if (sendForm && !sendForm.dataset.listenerAdded) {
-            sendForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await this.sendSingleMessage();
-            });
-            sendForm.dataset.listenerAdded = 'true';
-        }
-
-        // Start conversation form
-        const convForm = document.getElementById('start-conversation-form');
-        if (convForm && !convForm.dataset.listenerAdded) {
-            convForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await this.startConversation();
-            });
-            convForm.dataset.listenerAdded = 'true';
-        }
-
-        // Custom opener toggle
-        const openerSelect = document.getElementById('conv-opener');
-        if (openerSelect && !openerSelect.dataset.listenerAdded) {
-            openerSelect.addEventListener('change', (e) => {
-                const customGroup = document.getElementById('custom-opener-group');
-                customGroup.style.display = e.target.value === 'custom' ? 'block' : 'none';
-            });
-            openerSelect.dataset.listenerAdded = 'true';
-        }
-    }
-
-    async sendSingleMessage() {
-        const phoneNumber = document.getElementById('send-phone').value;
-        const message = document.getElementById('send-message').value;
-        const resultDiv = document.getElementById('send-result');
-
-        if (!phoneNumber || !message) {
-            resultDiv.innerHTML = '<div class="alert alert-error">Please fill in all fields</div>';
-            return;
-        }
-
-        resultDiv.innerHTML = '<div class="alert alert-info">Sending message...</div>';
-
-        const result = await this.apiCall('/send-message', 'POST', { phoneNumber, message });
-
-        if (result.success) {
-            resultDiv.innerHTML = '<div class="alert alert-success">✅ Message sent successfully!</div>';
-            document.getElementById('send-message-form').reset();
-            
-            setTimeout(() => {
-                resultDiv.innerHTML = '';
-            }, 3000);
-        } else {
-            resultDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error || 'Failed to send message'}</div>`;
-        }
-    }
-
-    async startConversation() {
-        const phoneNumber = document.getElementById('conv-phone').value;
-        const openerSelect = document.getElementById('conv-opener');
-        let opener = openerSelect.value;
-        
-        if (opener === 'custom') {
-            opener = document.getElementById('conv-custom').value;
-            if (!opener) {
-                document.getElementById('conversation-result').innerHTML = '<div class="alert alert-error">Please enter a custom message</div>';
-                return;
-            }
-        }
-
-        const autoContinue = document.getElementById('conv-auto-continue').checked;
-        const resultDiv = document.getElementById('conversation-result');
-
-        if (!phoneNumber) {
-            resultDiv.innerHTML = '<div class="alert alert-error">Please enter a phone number</div>';
-            return;
-        }
-
-        resultDiv.innerHTML = '<div class="alert alert-info">🚀 Starting conversation...</div>';
-
-        const result = await this.apiCall('/start-conversation', 'POST', { 
-            phoneNumber, 
-            opener, 
-            autoContinue 
-        });
-
-        if (result.success) {
-            let message = '✅ Conversation started!<br>';
-            message += `📤 Sent: "${opener}"<br>`;
-            if (autoContinue) {
-                message += '🤖 AI will automatically continue the conversation';
-            }
-            resultDiv.innerHTML = `<div class="alert alert-success">${message}</div>`;
-            document.getElementById('start-conversation-form').reset();
-            
-            setTimeout(() => {
-                resultDiv.innerHTML = '';
-            }, 5000);
-        } else {
-            resultDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error || 'Failed to start conversation'}</div>`;
-        }
-    }
-
-    async quickMessage(type) {
-        const messages = {
-            girlfriend: {
-                phone: '+628112656869', // Your girlfriend's number
-                text: 'Hey baby, what are you up to?'
-            },
-            checkIn: {
-                phone: '+628112656869',
-                text: 'Hey! How are you?'
-            },
-            whereAreYou: {
-                phone: '+628112656869',
-                text: 'Where are you?'
-            },
-            goodMorning: {
-                phone: '+628112656869',
-                text: 'Good morning baby ☀️'
-            }
-        };
-
-        const msg = messages[type];
-        if (!msg) return;
-
-        // Navigate to send page and fill in the form
-        this.navigateTo('send');
-        
-        setTimeout(() => {
-            document.getElementById('send-phone').value = msg.phone;
-            document.getElementById('send-message').value = msg.text;
-            
-            // Show a notification
-            const resultDiv = document.getElementById('send-result');
-            resultDiv.innerHTML = '<div class="alert alert-info">💡 Quick message loaded! Click "Send Message" to send it.</div>';
-            
-            setTimeout(() => {
-                resultDiv.innerHTML = '';
-            }, 3000);
-        }, 100);
+        }, 5000);
     }
 }
 
-// Initialize the app
-const app = new WhatsAppAssistant();
+// Initialize app
+const app = new WhatsAppAI();
 
-// Update navigateTo to handle inbox
-const originalNavigateTo2 = WhatsAppAssistant.prototype.navigateTo;
-WhatsAppAssistant.prototype.navigateTo = function(page) {
-    // Clear auto-refresh when leaving inbox
-    if (this.currentPage === 'inbox' && page !== 'inbox') {
-        if (this.autoRefreshInterval) {
-            clearInterval(this.autoRefreshInterval);
-            this.autoRefreshInterval = null;
-        }
-    }
-    
-    // Update active nav item
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-        if (item.dataset.page === page) {
-            item.classList.add('active');
-        }
-    });
-
-    // Update active page
-    document.querySelectorAll('.page').forEach(p => {
-        p.classList.remove('active');
-    });
-    document.getElementById(`${page}-page`).classList.add('active');
-
-    this.currentPage = page;
-
-    // Load page data
-    switch (page) {
-        case 'dashboard':
-            this.loadDashboard();
-            break;
-        case 'inbox':
-            this.loadInbox();
-            this.startInboxAutoRefresh();
-            break;
-        case 'knowledge':
-            this.loadKnowledge();
-            break;
-        case 'settings':
-            this.loadSettings();
-            break;
-        case 'messages':
-            this.loadMessages();
-            break;
-        case 'whitelist':
-            this.loadWhitelist();
-            break;
-        case 'send':
-            this.loadSendPage();
-            break;
-    }
-};
-
-// Setup login form
-document.addEventListener('DOMContentLoaded', () => {
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-            const errorDiv = document.getElementById('login-error');
-            
-            // Hide previous errors
-            errorDiv.style.display = 'none';
-            
-            // Attempt login
-            const result = await app.login(username, password);
-            
-            if (!result.success) {
-                errorDiv.textContent = result.error || 'Login failed';
-                errorDiv.style.display = 'block';
-            }
-        });
-    }
-});
-
-// Setup auto-refresh checkbox listener for inbox
-document.addEventListener('DOMContentLoaded', () => {
-    const inboxCheckbox = document.getElementById('auto-refresh-inbox');
-    if (inboxCheckbox) {
-        inboxCheckbox.addEventListener('change', () => {
-            if (app.currentPage === 'inbox') {
-                app.startInboxAutoRefresh();
-            }
-        });
-    }
-});
